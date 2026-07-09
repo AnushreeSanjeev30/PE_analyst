@@ -1,5 +1,5 @@
 # PE-Analyst
-
+(on-going)
 PE-Analyst is an evidence-grounded agentic AI system for private equity investment analysis and decision support.
 
 The platform is designed to reproduce major stages of the private equity investment workflow:
