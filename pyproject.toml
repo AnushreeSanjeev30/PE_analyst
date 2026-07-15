@@ -78,7 +78,7 @@ ignore = []
 
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 
 strict = true
 
@@ -92,4 +92,4 @@ no_implicit_optional = true
 
 plugins = [
     "pydantic.mypy"
-]
+]   

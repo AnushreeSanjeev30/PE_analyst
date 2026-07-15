@@ -1,6 +1,7 @@
 """Shared pytest fixtures for PE-Analyst."""
 
 from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -19,3 +20,15 @@ def test_settings(tmp_path: Path) -> Settings:
         processed_data_dir=tmp_path / "processed",
         openai_api_key=None,
     )
+
+
+@pytest.fixture
+def company_id() -> UUID:
+    """Return a random company identifier."""
+    return uuid4()
+
+
+@pytest.fixture
+def document_id() -> UUID:
+    """Return a random document identifier."""
+    return uuid4()

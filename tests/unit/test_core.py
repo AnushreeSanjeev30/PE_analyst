@@ -80,8 +80,8 @@ def test_invalid_rerank_top_k() -> None:
 def test_enum_values() -> None:
     """Important domain enums should expose stable serialized values."""
 
-    assert RiskSeverity.CRITICAL == "critical"
-    assert InvestmentDecision.APPROVE == "approve"
+    assert RiskSeverity.CRITICAL.value == "critical"
+    assert InvestmentDecision.APPROVE.value == "approve"
 
 
 def test_ensure_directories(test_settings: Settings) -> None:
