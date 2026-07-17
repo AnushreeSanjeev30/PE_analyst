@@ -1,5 +1,7 @@
 """Financial analysis engine."""
 
+from .growth import average_growth, cagr, growth_rate, project_value
+from .models import FinancialStatement, GrowthMetrics
 from .ratios import (
     asset_turnover,
     current_ratio,
@@ -24,4 +26,10 @@ __all__ = [
     "return_on_equity",
     "debt_to_ebitda",
     "interest_coverage",
+    "FinancialStatement",
+    "GrowthMetrics",
+    "growth_rate",
+    "cagr",
+    "average_growth",
+    "project_value",
 ]
