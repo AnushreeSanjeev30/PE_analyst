@@ -29,9 +29,7 @@ def test_cagr():
 
 
 def test_average_growth():
-    assert average_growth(
-        [0.10, 0.20, 0.30]
-    ) == pytest.approx(0.20)
+    assert average_growth([0.10, 0.20, 0.30]) == pytest.approx(0.20)
 
 
 def test_projection():

@@ -59,9 +59,7 @@ class Settings(BaseSettings):
     # Database
     # ------------------------------------------------------------------
 
-    database_url: str = (
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pe_analyst"
-    )
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/pe_analyst"
 
     # ------------------------------------------------------------------
     # Vector Store
@@ -170,10 +168,7 @@ class Settings(BaseSettings):
         }
 
         if normalized_value not in allowed_levels:
-            message = (
-                f"Invalid LOG_LEVEL '{value}'. "
-                f"Expected one of: {sorted(allowed_levels)}."
-            )
+            message = f"Invalid LOG_LEVEL '{value}'. Expected one of: {sorted(allowed_levels)}."
             raise ValueError(message)
 
         return normalized_value
@@ -190,10 +185,7 @@ class Settings(BaseSettings):
         chunk_size = info.data.get("document_chunk_size")
 
         if chunk_size is not None and value >= chunk_size:
-            message = (
-                "DOCUMENT_CHUNK_OVERLAP must be smaller than "
-                "DOCUMENT_CHUNK_SIZE."
-            )
+            message = "DOCUMENT_CHUNK_OVERLAP must be smaller than DOCUMENT_CHUNK_SIZE."
             raise ValueError(message)
 
         return value

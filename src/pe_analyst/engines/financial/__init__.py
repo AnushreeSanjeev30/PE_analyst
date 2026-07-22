@@ -1,5 +1,15 @@
 """Financial analysis engine."""
 
+from .analyzers import (
+    AnalysisFinding,
+    QualityOfEarningsAnalyzer,
+    QualityOfEarningsReport,
+    Severity,
+)
+from .engine import (
+    FinancialAnalysisEngine,
+    FinancialAnalysisReport,
+)
 from .growth import average_growth, cagr, growth_rate, project_value
 from .models import FinancialStatement, GrowthMetrics
 from .ratios import (
@@ -32,4 +42,10 @@ __all__ = [
     "cagr",
     "average_growth",
     "project_value",
+    "FinancialAnalysisEngine",
+    "FinancialAnalysisReport",
+    "Severity",
+    "AnalysisFinding",
+    "QualityOfEarningsReport",
+    "QualityOfEarningsAnalyzer",
 ]

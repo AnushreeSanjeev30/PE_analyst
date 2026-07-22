@@ -34,9 +34,7 @@ def growth_rate(
     _validate(current, "current")
 
     if previous == 0:
-        raise ZeroDivisionError(
-            "Previous period cannot be zero."
-        )
+        raise ZeroDivisionError("Previous period cannot be zero.")
 
     return (current - previous) / previous
 
@@ -53,14 +51,10 @@ def cagr(
     _validate(ending, "ending")
 
     if beginning <= 0:
-        raise ValueError(
-            "Beginning value must be positive."
-        )
+        raise ValueError("Beginning value must be positive.")
 
     if periods <= 0:
-        raise ValueError(
-            "Periods must be positive."
-        )
+        raise ValueError("Periods must be positive.")
 
     return cast(float, (ending / beginning) ** (1 / periods) - 1)
 
@@ -72,9 +66,7 @@ def average_growth(
     Arithmetic mean of growth rates.
     """
     if not growth_rates:
-        raise ValueError(
-            "Growth rate list cannot be empty."
-        )
+        raise ValueError("Growth rate list cannot be empty.")
 
     for value in growth_rates:
         _validate(value, "growth rate")
@@ -98,10 +90,6 @@ def project_value(
     _validate(annual_growth_rate, "annual_growth_rate")
 
     if years < 0:
-        raise ValueError(
-            "Years cannot be negative."
-        )
+        raise ValueError("Years cannot be negative.")
 
-    return current_value * (
-        (1 + annual_growth_rate) ** years
-    )
+    return current_value * ((1 + annual_growth_rate) ** years)

@@ -6,12 +6,7 @@ from typing import Any
 
 from pe_analyst.core.config import Settings, get_settings
 
-DEFAULT_LOG_FORMAT = (
-    "%(asctime)s | "
-    "%(levelname)s | "
-    "%(name)s | "
-    "%(message)s"
-)
+DEFAULT_LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
 def build_logging_config(settings: Settings) -> dict[str, Any]:
@@ -44,9 +39,7 @@ def configure_logging(settings: Settings | None = None) -> None:
 
     resolved_settings = settings or get_settings()
 
-    logging.config.dictConfig(
-        build_logging_config(resolved_settings)
-    )
+    logging.config.dictConfig(build_logging_config(resolved_settings))
 
 
 def get_logger(name: str) -> logging.Logger:
