@@ -5,9 +5,10 @@ from dataclasses import dataclass
 class ProjectionResult:
     year: int
     revenue: float
+    ebitda: float
+    depreciation: float
     ebit: float
     nopat: float
-    depreciation: float
     capex: float
-    change_nwc: float
+    delta_nwc: float
     fcff: float
