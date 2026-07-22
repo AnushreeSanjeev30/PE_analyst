@@ -4,8 +4,11 @@ from .discount import DiscountEngine
 from .engine import ValuationEngine
 from .exceptions import InvalidAssumptionError, ValuationError
 from .multiples import MultiplesEngine
+from .peer import PeerCompany
 from .projections import ProjectionResult
+from .report import ComparableStatistics, ComparableValuationReport
 from .results import DCFResult
+from .statistics import StatisticsEngine
 from .terminal import TerminalValueEngine
 
 __all__ = [
@@ -19,4 +22,11 @@ __all__ = [
     "InvalidAssumptionError",
     "MultiplesEngine",
     "ValuationEngine",
+]
+
+__all__ += [
+    "PeerCompany",
+    "StatisticsEngine",
+    "ComparableStatistics",
+    "ComparableValuationReport",
 ]
