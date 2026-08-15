@@ -199,10 +199,3 @@ Run Ruff.
 ruff check .
 ```
 
-## Disclaimer
-
-PE-Analyst is a research and educational decision-support system.
-
-It does not provide financial, investment, legal, accounting, or tax advice.
-
-The system should not be used as the sole basis for real-world investment decisions.
