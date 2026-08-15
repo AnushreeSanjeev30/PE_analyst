@@ -55,6 +55,14 @@ class Settings(BaseSettings):
 
     openai_embedding_model: str = "text-embedding-3-small"
 
+    anthropic_api_key: str | None = None
+
+    gemini_api_key: str | None = None
+
+    ollama_base_url: str = "http://127.0.0.1:11434"
+
+    llm_timeout_seconds: float = Field(default=60.0, gt=0)
+
     # ------------------------------------------------------------------
     # Database
     # ------------------------------------------------------------------

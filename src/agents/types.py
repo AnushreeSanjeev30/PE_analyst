@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -12,4 +13,4 @@ class AgentResponse:
 
     findings: list[str]
 
-    metadata: dict
+    metadata: dict[str, Any]

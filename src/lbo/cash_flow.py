@@ -28,6 +28,7 @@ class CashFlowEngine:
         for projection, debt in zip(
             operating_projection,
             debt_schedule,
+            strict=True,
         ):
 
             operating_cf = (

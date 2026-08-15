@@ -1,5 +1,4 @@
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 from .state import AgentState
 from .types import AgentResponse
@@ -30,7 +29,7 @@ class BaseAgent(ABC):
     def validate(
         self,
         state: AgentState,
-    ):
+    ) -> None:
 
         if state is None:
 
@@ -49,7 +48,7 @@ class BaseAgent(ABC):
         self,
         state: AgentState,
         response: AgentResponse,
-    ):
+    ) -> None:
 
         state.conversation_history.append(
             f"{self.name}: {response.summary}"

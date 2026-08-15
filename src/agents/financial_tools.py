@@ -25,7 +25,7 @@ class FinancialTools:
     Collection of deterministic financial tools.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self.analysis_engine = FinancialAnalysisEngine()
 
@@ -38,7 +38,7 @@ class FinancialTools:
     def calculate_ratios(
         self,
         financials: Any,
-    ) -> dict:
+    ) -> dict[str, Any]:
 
         # Expect `financials` to be a dict with `current` and `previous`
         if isinstance(financials, dict) and {
@@ -53,7 +53,8 @@ class FinancialTools:
 
         else:
             raise TypeError(
-                "financials must be a dict containing 'current' and 'previous' FinancialStatement objects"
+                "financials must be a dict containing 'current' and "
+                "'previous' FinancialStatement objects"
             )
 
         return asdict(report)
@@ -65,7 +66,7 @@ class FinancialTools:
     def quality_analysis(
         self,
         financials: Any,
-    ) -> dict:
+    ) -> dict[str, Any]:
 
         # Reuse the analysis engine to produce a FinancialAnalysisReport
         if isinstance(financials, dict) and {
@@ -80,7 +81,8 @@ class FinancialTools:
 
         else:
             raise TypeError(
-                "financials must be a dict containing 'current' and 'previous' FinancialStatement objects"
+                "financials must be a dict containing 'current' and "
+                "'previous' FinancialStatement objects"
             )
 
         quality = self.quality_engine.analyze(report)
@@ -94,7 +96,7 @@ class FinancialTools:
     def full_analysis(
         self,
         financials: Any,
-    ) -> dict:
+    ) -> dict[str, Any]:
 
         ratios = self.calculate_ratios(
             financials
@@ -117,7 +119,7 @@ class FinancialTools:
         self,
         financials: Any,
         metric_name: str,
-    ):
+    ) -> Any:
 
         ratios = self.calculate_ratios(
             financials

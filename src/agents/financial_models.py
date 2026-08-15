@@ -8,15 +8,13 @@ is returned in a structured, consistent format.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import List
-
+from enum import StrEnum
 
 # ==========================================================
 # ENUMS
 # ==========================================================
 
-class FinancialHealth(str, Enum):
+class FinancialHealth(StrEnum):
     EXCELLENT = "Excellent"
     GOOD = "Good"
     AVERAGE = "Average"
@@ -24,7 +22,7 @@ class FinancialHealth(str, Enum):
     DISTRESSED = "Distressed"
 
 
-class Trend(str, Enum):
+class Trend(StrEnum):
     IMPROVING = "Improving"
     STABLE = "Stable"
     DECLINING = "Declining"
@@ -124,12 +122,12 @@ class FinancialReport:
 
     summary: FinancialSummary
 
-    findings: List[FinancialFinding] = field(default_factory=list)
+    findings: list[FinancialFinding] = field(default_factory=list)
 
-    metrics: List[MetricScore] = field(default_factory=list)
+    metrics: list[MetricScore] = field(default_factory=list)
 
-    strengths: List[FinancialStrength] = field(default_factory=list)
+    strengths: list[FinancialStrength] = field(default_factory=list)
 
-    weaknesses: List[FinancialWeakness] = field(default_factory=list)
+    weaknesses: list[FinancialWeakness] = field(default_factory=list)
 
     recommendation: FinancialRecommendation | None = None

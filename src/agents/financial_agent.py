@@ -12,28 +12,28 @@ This agent is responsible for:
 
 from __future__ import annotations
 
+from typing import Any
+
 from .base_agent import BaseAgent
+from .financial_models import (
+    FinancialFinding,
+    FinancialHealth,
+    FinancialRecommendation,
+    FinancialReport,
+    FinancialStrength,
+    FinancialSummary,
+    FinancialWeakness,
+    MetricScore,
+    Trend,
+)
+from .financial_tools import FinancialTools
 from .state import AgentState
 from .types import AgentResponse
-
-from .financial_models import (
-    FinancialReport,
-    FinancialSummary,
-    FinancialHealth,
-    Trend,
-    MetricScore,
-    FinancialFinding,
-    FinancialStrength,
-    FinancialWeakness,
-    FinancialRecommendation,
-)
-
-from .financial_tools import FinancialTools
 
 
 class FinancialAgent(BaseAgent):
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         super().__init__("Financial Agent")
 
@@ -81,11 +81,10 @@ class FinancialAgent(BaseAgent):
     def generate_report(
         self,
         company: str,
-        analysis: dict,
+        analysis: dict[str, Any],
     ) -> FinancialReport:
 
         ratios = analysis["ratios"]
-        quality = analysis["quality"]
 
         roe = ratios.get("roe", 0)
         current_ratio = ratios.get(

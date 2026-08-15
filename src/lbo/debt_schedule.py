@@ -20,13 +20,13 @@ class DebtSchedule:
             mandatory_amortization=assumptions.mandatory_amortization_pct,
         )
 
-    def project(self):
+    def project(self) -> list[DebtTranche]:
 
         debt = deepcopy(self.tranche)
 
-        schedule = []
+        schedule: list[DebtTranche] = []
 
-        for year in range(1, self.assumptions.holding_period + 1):
+        for _year in range(1, self.assumptions.holding_period + 1):
 
             opening = debt.opening_balance
 
