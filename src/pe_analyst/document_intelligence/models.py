@@ -13,6 +13,7 @@ class SectionKind(StrEnum):
     BALANCE_SHEET = "balance_sheet"
     CASH_FLOW_STATEMENT = "cash_flow_statement"
     MANAGEMENT_DISCUSSION = "management_discussion"
+    NOTES_TO_FINANCIAL_STATEMENTS = "notes_to_financial_statements"
     RISK_FACTORS = "risk_factors"
     INDUSTRY = "industry"
     OTHER = "other"
@@ -69,6 +70,13 @@ class ExtractedRiskFactor:
     source: SourceReference
 
 
+@dataclass(slots=True, frozen=True)
+class ExtractedNote:
+    title: str
+    text: str
+    source: SourceReference
+
+
 @dataclass(slots=True)
 class DocumentIntelligenceResult:
     document_id: UUID = field(default_factory=uuid4)
@@ -78,6 +86,7 @@ class DocumentIntelligenceResult:
     sections: list[DocumentSection] = field(default_factory=list)
     statement_line_items: list[StatementLineItem] = field(default_factory=list)
     risk_factors: list[ExtractedRiskFactor] = field(default_factory=list)
+    notes: list[ExtractedNote] = field(default_factory=list)
     management_discussion: list[SourceReference] = field(default_factory=list)
     industry_evidence: list[dict[str, object]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)

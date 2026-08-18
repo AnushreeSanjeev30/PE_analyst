@@ -59,3 +59,34 @@ def test_document_intelligence_builds_industry_evidence_from_document_text() -> 
         "management",
     }
     assert all(item["page_number"] == 3 for item in result.industry_evidence)
+
+
+class FakeExtractorWithNotes:
+    def extract(self, path: Path) -> ExtractedPDF:
+        return ExtractedPDF(
+            path=path,
+            page_count=1,
+            pages=[
+                ExtractedPage(
+                    1,
+                    (
+                        "Notes to the Consolidated Financial Statements. "
+                        "Note 1. Summary of Significant Accounting Policies "
+                        "The Company recognizes revenue when control transfers to the customer. "
+                        "Note 2. Debt "
+                        "Total debt outstanding was $200 million at a weighted average rate of 6%."
+                    ),
+                )
+            ],
+        )
+
+
+def test_document_intelligence_extracts_notes_with_page_provenance() -> None:
+    result = DocumentIntelligenceService(FakeExtractorWithNotes()).process("ExampleCo_2025.pdf")
+
+    assert len(result.notes) == 2
+    assert result.notes[0].title.startswith("Note 1")
+    assert "revenue" in result.notes[0].text.lower()
+    assert result.notes[0].source.page_number == 1
+    assert result.notes[1].title.startswith("Note 2")
+    assert "debt" in result.notes[1].text.lower()

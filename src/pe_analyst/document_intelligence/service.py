@@ -9,12 +9,15 @@ from .extractor import PDFExtractor
 from .models import (
     DocumentIntelligenceResult,
     DocumentSection,
+    ExtractedNote,
     ExtractedPDF,
     ExtractedRiskFactor,
     SectionKind,
     SourceReference,
     StatementLineItem,
 )
+
+_NOTE_HEADER = re.compile(r"Note\s+\d+[.:]", re.IGNORECASE)
 
 
 class DocumentIntelligenceService:
@@ -31,6 +34,12 @@ class DocumentIntelligenceService:
             "management discussion and analysis",
             "md&a",
         ),
+        SectionKind.NOTES_TO_FINANCIAL_STATEMENTS: (
+            "notes to financial statements",
+            "notes to the financial statements",
+            "notes to consolidated financial statements",
+            "notes to the consolidated financial statements",
+        ),
         SectionKind.RISK_FACTORS: ("risk factors",),
         SectionKind.INDUSTRY: ("market", "industry", "competition", "competitive"),
     }
@@ -46,6 +55,7 @@ class DocumentIntelligenceService:
         sections = self._sections(pdf)
         line_items = self._statement_line_items(pdf, sections)
         risks = self._risk_factors(pdf, sections)
+        notes = self._notes(pdf, sections)
         management = self._references_for_kind(pdf, sections, SectionKind.MANAGEMENT_DISCUSSION)
         industry = self._industry_evidence(pdf, sections)
         warnings: list[str] = []
@@ -62,6 +72,7 @@ class DocumentIntelligenceService:
             sections=sections,
             statement_line_items=line_items,
             risk_factors=risks,
+            notes=notes,
             management_discussion=management,
             industry_evidence=industry,
             warnings=warnings,
@@ -152,6 +163,29 @@ class DocumentIntelligenceService:
                         )
                     )
         return factors
+
+    def _notes(
+        self, pdf: ExtractedPDF, sections: list[DocumentSection]
+    ) -> list[ExtractedNote]:
+        pages = {
+            page
+            for section in sections
+            if section.kind == SectionKind.NOTES_TO_FINANCIAL_STATEMENTS
+            for page in section.pages
+        }
+        notes: list[ExtractedNote] = []
+        for page in pdf.pages:
+            if page.page_number not in pages:
+                continue
+            headers = list(_NOTE_HEADER.finditer(page.text))
+            for index, header in enumerate(headers):
+                end = headers[index + 1].start() if index + 1 < len(headers) else len(page.text)
+                title = re.sub(r"\s+", " ", header.group()).strip()
+                body = page.text[header.end() : end].strip()
+                if body:
+                    source = self._reference(body, page.page_number)
+                    notes.append(ExtractedNote(title, body, source))
+        return notes
 
     def _references_for_kind(
         self, pdf: ExtractedPDF, sections: list[DocumentSection], kind: SectionKind
