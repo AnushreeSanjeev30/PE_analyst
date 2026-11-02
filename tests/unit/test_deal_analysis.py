@@ -146,6 +146,19 @@ def _industry_inputs() -> dict:
     }
 
 
+def _due_diligence_inputs() -> list[dict]:
+    return [
+        {
+            "title": "Customer concentration",
+            "text": "Top customer represents a meaningful share of revenue.",
+            "source": "2025 Annual Report",
+            "page_number": 22,
+            "excerpt": "Our largest customer accounted for a significant portion of revenue.",
+            "confidence": 0.8,
+        }
+    ]
+
+
 def test_run_deal_analysis_completes_all_stages_and_returns_a_unified_report() -> None:
     inputs = DealAnalysisInputs(
         company_name="ExampleCo",
@@ -153,6 +166,7 @@ def test_run_deal_analysis_completes_all_stages_and_returns_a_unified_report() -
         valuation_inputs=_valuation_inputs(),
         industry_inputs=_industry_inputs(),
         risk_inputs={"altman_z": 3.2, "piotroski_score": 7, "industry_risk_score": 30},
+        due_diligence_inputs=_due_diligence_inputs(),
     )
 
     report = run_deal_analysis(inputs)
@@ -163,18 +177,38 @@ def test_run_deal_analysis_completes_all_stages_and_returns_a_unified_report() -
     assert [record.stage for record in report.stages] == [
         "financial",
         "valuation",
+        "scenario",
         "risk",
+        "due_diligence",
         "industry",
         "investment_committee",
+        "deal_partner",
+        "risk_officer",
+        "operating_partner",
+        "chairperson",
+        "memo",
     ]
     assert all(record.status == RunStatus.COMPLETED for record in report.stages)
     assert report.financial_report is not None
     assert report.valuation_report is not None
     assert report.risk_report is not None
     assert report.industry_report is not None
+    assert report.due_diligence_report is not None
+    assert report.due_diligence_report.red_flags
     assert report.investment_committee_report is not None
+    assert report.ic_decision is not None
     assert report.final_recommendation in {"BUY", "HOLD", "REJECT"}
-    assert report.investment_committee_report.summary.recommendation == report.final_recommendation
+    assert report.ic_decision.final_recommendation == report.final_recommendation
+    assert report.ic_decision.deal_partner.thesis
+    assert report.ic_decision.risk_officer.verdict is not None
+    assert report.ic_decision.operating_partner.value_levers
+    assert report.scenario_report is not None
+    assert [case.name for case in report.scenario_report.cases] == ["Bear", "Base", "Bull"]
+    assert report.investment_memo is not None
+    assert report.investment_memo.recommendation == report.final_recommendation
+    assert "## Valuation" in report.investment_memo.markdown
+    assert report.investment_memo.llm_draft is None
+    assert report.narratives == {}
 
 
 def test_run_deal_analysis_fails_fast_and_keeps_completed_reports() -> None:
@@ -198,6 +232,13 @@ def test_run_deal_analysis_fails_fast_and_keeps_completed_reports() -> None:
     assert [record.status for record in report.stages] == [
         RunStatus.COMPLETED,
         RunStatus.FAILED,
+        RunStatus.SKIPPED,
+        RunStatus.SKIPPED,
+        RunStatus.SKIPPED,
+        RunStatus.SKIPPED,
+        RunStatus.SKIPPED,
+        RunStatus.SKIPPED,
+        RunStatus.SKIPPED,
         RunStatus.SKIPPED,
         RunStatus.SKIPPED,
         RunStatus.SKIPPED,

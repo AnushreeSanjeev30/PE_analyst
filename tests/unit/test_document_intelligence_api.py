@@ -3,6 +3,8 @@ import io
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 
+from pe_analyst.auth.dependencies import get_current_user
+from pe_analyst.auth.models import UserPublic
 from pe_analyst.core.config import Settings, get_settings
 from pe_analyst.main import app
 
@@ -17,6 +19,9 @@ def _blank_pdf_bytes() -> bytes:
 
 def _client(test_settings: Settings) -> TestClient:
     app.dependency_overrides[get_settings] = lambda: test_settings
+    app.dependency_overrides[get_current_user] = lambda: UserPublic(
+        id="test-user", email="analyst@example.com", role="analyst"
+    )
     return TestClient(app)
 
 
@@ -38,6 +43,33 @@ def test_upload_document_returns_a_validated_report(test_settings: Settings) -> 
         app.dependency_overrides.clear()
 
 
+def test_upload_document_persists_a_fetchable_report(test_settings: Settings) -> None:
+    client = _client(test_settings)
+    try:
+        upload_response = client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("Annual_Report.pdf", _blank_pdf_bytes(), "application/pdf")},
+        )
+        document_id = upload_response.json()["document_id"]
+
+        get_response = client.get(f"/api/v1/documents/{document_id}")
+
+        assert get_response.status_code == 200
+        assert get_response.json()["document_id"] == document_id
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_get_document_returns_404_for_an_unknown_id(test_settings: Settings) -> None:
+    client = _client(test_settings)
+    try:
+        response = client.get("/api/v1/documents/does-not-exist")
+
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_upload_document_rejects_non_pdf_uploads(test_settings: Settings) -> None:
     client = _client(test_settings)
     try:
@@ -47,6 +79,42 @@ def test_upload_document_rejects_non_pdf_uploads(test_settings: Settings) -> Non
         )
 
         assert response.status_code == 415
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_documents_returns_uploaded_documents_newest_first(test_settings: Settings) -> None:
+    client = _client(test_settings)
+    try:
+        client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("First.pdf", _blank_pdf_bytes(), "application/pdf")},
+        )
+        client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("Second.pdf", _blank_pdf_bytes(), "application/pdf")},
+        )
+
+        response = client.get("/api/v1/documents")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
+        assert {entry["file_name"].split("_", 1)[-1] for entry in body} == {
+            "First.pdf",
+            "Second.pdf",
+        }
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_list_documents_is_empty_with_no_uploads(test_settings: Settings) -> None:
+    client = _client(test_settings)
+    try:
+        response = client.get("/api/v1/documents")
+
+        assert response.status_code == 200
+        assert response.json() == []
     finally:
         app.dependency_overrides.clear()
 

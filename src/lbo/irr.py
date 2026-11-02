@@ -21,6 +21,13 @@ class IRREngine:
         years: int,
     ) -> float:
 
+        # Equity holders cannot lose more than they invested: a wiped-out or negative
+        # exit equity value is a total loss, i.e. -100% IRR, not an undefined fractional
+        # power of a negative number.
+        if exit_equity <= 0:
+
+            return -1.0
+
         return (
             math.pow(
                 exit_equity / invested_equity,

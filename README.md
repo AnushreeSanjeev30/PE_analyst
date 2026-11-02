@@ -1,5 +1,4 @@
 # PE-Analyst
-(on-going)
 PE-Analyst is an evidence-grounded agentic AI system for private equity investment analysis and decision support.
 
 The platform is designed to reproduce major stages of the private equity investment workflow:
@@ -47,7 +46,7 @@ The database stores persistent state and audit history.
 
 Evidence supports material investment claims.
 
-## Planned Architecture
+## Architecture
 
 ```text
 React Frontend
@@ -69,25 +68,26 @@ PostgreSQL + pgvector
 
 ## Specialist Agents
 
-The planned system contains the following specialist agents:
+The workflow runs these agents in order (`src/agents/orchestrator.py`):
 
-- Document Intelligence Agent
-- Financial Analysis Agent
-- Industry Research Agent
-- Due Diligence Agent
-- Risk Agent
-- Scenario Analysis Agent
-- Investment Memo Agent
-- Deal Partner Agent
-- Risk Officer Agent
-- Operating Partner Agent
-- Investment Committee Chairperson Agent
+1. Financial Agent: ratios, growth and quality of earnings
+2. Valuation Agent: DCF, comparables and LBO
+3. Scenario Analysis Agent: probability-weighted returns, break-even and capital-preservation exit multiples, and an exit x EBITDA sensitivity grid
+4. Risk Agent
+5. Due Diligence Agent: cited red flags
+6. Industry Agent: cited market and competition findings
+7. Investment Committee Agent: weighted scorecard
+8. Deal Partner, Risk Officer and Operating Partner: the IC debate
+9. IC Chairperson: final BUY / HOLD / REJECT ruling
+10. Investment Memo Agent: the committee memo in Markdown
+
+Document Intelligence (PDF text, tables and OCR) runs at upload time and feeds stages 1, 5 and 6.
 
 ## Deterministic Engines
 
 Financial calculations are performed outside the LLM.
 
-Planned engines include:
+Engines include:
 
 - Financial Ratio Engine
 - Growth Analysis Engine
@@ -113,8 +113,8 @@ Planned engines include:
 
 ### AI and Agent Orchestration
 
-- OpenAI API
-- LangGraph
+- Groq (default, free tier: Llama 3.3 70B / gpt-oss), with xAI Grok, OpenAI, Anthropic, Gemini
+  and Ollama as alternatives behind one provider-neutral `LLMService`
 
 ### Data Processing
 
@@ -124,8 +124,8 @@ Planned engines include:
 
 ### Document Processing
 
-- PyMuPDF
-- Docling
+- pypdf and pdfplumber
+- Tesseract OCR (optional)
 
 ### Frontend
 
@@ -139,14 +139,53 @@ Planned engines include:
 
 ## Project Status
 
-The project is currently under active development.
+The full workflow is implemented: upload PDF → extraction → specialist agents → IC debate →
+memo. It runs behind an authenticated FastAPI backend with a React frontend, Postgres and
+pgvector, Docker and CI.
 
-Current milestone:
+## How the LLM is used
 
-```text
-Milestone 1
-Repository Foundation and Core Infrastructure
+The LLM never produces a number or a decision. Each agent finishes its deterministic report
+first. If an LLM key is configured, a narrator (`src/agents/narration.py`) then writes analyst
+commentary over that report, and the Memo Agent gets a full written draft. Any figure in the
+LLM's text that is missing from the report is flagged in `warnings`. Without a key, the workflow
+is fully deterministic and returns identical decisions.
+
+```bash
+# .env: free key from https://console.groq.com/keys
+LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_...
 ```
+
+## Market data
+
+Comparable peers can be typed in, or fetched from Alpha Vantage (free key) by ticker:
+
+```bash
+MARKET_DATA_PROVIDER=alphavantage
+MARKET_DATA_API_KEY=...
+```
+
+```json
+"comparables": {"target": {...}, "peer_tickers": ["ORCL", "SAP", "ADBE"]}
+```
+
+Responses are cached for 24 hours in `data/market_cache/`, because the free tier allows about 25
+calls a day.
+
+## Evaluation and fine-tuning
+
+```bash
+python scripts/build_edgar_cases.py MSFT ADBE CRM --fiscal-year 2024  # extraction gold set (SEC XBRL)
+python scripts/run_evals.py                                           # score; report -> data/eval_reports/
+python scripts/export_finetune_data.py --review                       # approve/reject logged LLM outputs
+python scripts/export_finetune_data.py                                # train.jsonl / val.jsonl
+```
+
+There are three suites: document extraction, citation accuracy and recommendation consistency.
+See `src/pe_analyst/evaluation/datasets/README.md`. Every LLM call is logged in chat
+fine-tuning format to `data/llm_logs/`. Reviewing those logs is how the fine-tuning dataset gets
+built.
 
 ## Development Setup
 
@@ -187,7 +226,7 @@ Install the project in editable mode with development dependencies.
 pip install -e ".[dev]"
 ```
 
-Run tests.
+Run tests (unit and end-to-end; no API keys or network needed).
 
 ```bash
 pytest

@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pe_analyst
+    ports:
+      # Host-side 5433 to avoid clashing with any other Postgres already running on 5432 on
+      # the host; the api service still talks to it as "postgres:5432" over the compose network.
+      - "5433:5432"
+    volumes:
+      - pe_analyst_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pe_analyst"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    command: sh -c "alembic upgrade head && uvicorn pe_analyst.main:app --host 0.0.0.0 --port 8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/pe_analyst
+      VECTOR_STORE_PROVIDER: pgvector
+    ports:
+      - "8000:8000"
+    volumes:
+      - pe_analyst_uploads:/app/data/uploads
+      - pe_analyst_processed:/app/data/processed
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pe_analyst_postgres_data:
+  pe_analyst_uploads:
+  pe_analyst_processed:

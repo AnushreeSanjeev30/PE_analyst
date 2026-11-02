@@ -45,6 +45,8 @@ def test_document_intelligence_extracts_provenance_and_structured_candidates() -
     assert result.page_count == 3
     assert any(section.kind == SectionKind.INCOME_STATEMENT for section in result.sections)
     assert len(result.statement_line_items) == 2
+    assert result.statement_line_items[0].parsed_values == [1000.0, 900.0]
+    assert result.statement_line_items[1].parsed_values == [100.0, 80.0]
     assert result.statement_line_items[0].source.page_number == 1
     assert result.risk_factors[0].source.page_number == 2
     assert result.management_discussion[0].page_number == 3

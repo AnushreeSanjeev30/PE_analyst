@@ -9,6 +9,8 @@ from .state import AgentState
 from .types import AgentResponse
 from .valuation_models import (
     LBOReturnProfile,
+    ScenarioAnalysis,
+    ScenarioOutcome,
     ValuationFinding,
     ValuationMethod,
     ValuationRecommendation,
@@ -39,13 +41,20 @@ class ValuationAgent(BaseAgent):
         dcf = self.tools.run_dcf(inputs["dcf"])
         comparables = self.tools.run_comparables(inputs["comparables"])
         lbo = self.tools.run_lbo(inputs["lbo"])
+        scenarios = self.tools.run_scenarios(inputs["lbo"])
         report = self.generate_report(
-            state.company_name, dcf, comparables, lbo, inputs.get("current_price_per_share")
+            state.company_name,
+            dcf,
+            comparables,
+            lbo,
+            scenarios,
+            inputs.get("current_price_per_share"),
         )
         state.valuation = {
             "dcf": dcf,
             "comparables": comparables,
             "lbo": lbo,
+            "scenarios": scenarios,
             "report": report,
         }
         state.metadata["valuation_report"] = report
@@ -63,6 +72,7 @@ class ValuationAgent(BaseAgent):
         dcf: dict[str, Any],
         comparables: dict[str, Any],
         lbo: dict[str, Any],
+        scenarios: dict[str, Any],
         current_price: Any,
     ) -> ValuationReport:
         dcf_result = dcf["result"]
@@ -127,6 +137,24 @@ class ValuationAgent(BaseAgent):
             lbo_result["debt_remaining"],
             lbo["assumptions"]["holding_period"],
         )
+        scenario_analysis = ScenarioAnalysis(
+            target_irr=scenarios["target_irr"],
+            outcomes=[
+                ScenarioOutcome(
+                    outcome.name,
+                    outcome.exit_multiple,
+                    outcome.result.irr,
+                    outcome.result.moic,
+                    outcome.result.exit_equity,
+                )
+                for outcome in scenarios["outcomes"]
+            ],
+            breakeven_exit_multiple=scenarios["breakeven_exit_multiple"],
+        )
+        bear_case = next(
+            (o for o in scenario_analysis.outcomes if o.name == "Bear"),
+            scenario_analysis.outcomes[0],
+        )
         findings = [
             ValuationFinding(
                 "DCF intrinsic value calculated", f"DCF indicates {dcf_price:.2f} per share."
@@ -140,11 +168,17 @@ class ValuationAgent(BaseAgent):
                 f"Base-case IRR is {irr:.1%} and MOIC is {float(lbo_result['moic']):.2f}x.",
                 "WARNING" if irr < 0.20 else "INFO",
             ),
+            ValuationFinding(
+                "Downside scenario assessed",
+                f"Bear case IRR is {bear_case.irr:.1%} at a {bear_case.exit_multiple:.1f}x exit.",
+                "WARNING" if bear_case.irr < 0.0 else "INFO",
+            ),
         ]
         return ValuationReport(
             summary,
             methods,
             lbo_profile,
+            scenario_analysis,
             findings,
             {"dcf_weight": 0.60, "comparables_weight": 0.40, "target_irr": 0.20},
         )

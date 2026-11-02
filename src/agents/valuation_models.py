@@ -56,9 +56,26 @@ class ValuationFinding:
 
 
 @dataclass(slots=True)
+class ScenarioOutcome:
+    name: str
+    exit_multiple: float
+    irr: float
+    moic: float
+    exit_equity_value: float
+
+
+@dataclass(slots=True)
+class ScenarioAnalysis:
+    target_irr: float
+    outcomes: list[ScenarioOutcome] = field(default_factory=list)
+    breakeven_exit_multiple: float | None = None
+
+
+@dataclass(slots=True)
 class ValuationReport:
     summary: ValuationSummary
     methods: list[ValuationMethod] = field(default_factory=list)
     lbo_returns: LBOReturnProfile | None = None
+    scenario_analysis: ScenarioAnalysis | None = None
     findings: list[ValuationFinding] = field(default_factory=list)
     key_assumptions: dict[str, float | int | str] = field(default_factory=dict)

@@ -19,6 +19,8 @@ class AgentState:
 
     industry: dict[str, Any] = field(default_factory=dict)
 
+    due_diligence: dict[str, Any] = field(default_factory=dict)
+
     recommendation: dict[str, Any] = field(default_factory=dict)
 
     conversation_history: list[str] = field(default_factory=list)

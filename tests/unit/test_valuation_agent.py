@@ -111,9 +111,15 @@ def test_valuation_agent_runs_all_three_methods_and_updates_state() -> None:
     assert report.summary.fair_value_per_share is not None
     assert report.lbo_returns is not None
     assert report.lbo_returns.irr > 0
-    assert set(state.valuation) == {"dcf", "comparables", "lbo", "report"}
+    assert set(state.valuation) == {"dcf", "comparables", "lbo", "scenarios", "report"}
     assert state.metadata["valuation_report"] is report
     assert len(state.conversation_history) == 1
+
+    scenario_analysis = report.scenario_analysis
+    assert scenario_analysis is not None
+    assert [outcome.name for outcome in scenario_analysis.outcomes] == ["Bear", "Base", "Bull"]
+    assert scenario_analysis.outcomes[0].irr < scenario_analysis.outcomes[2].irr
+    assert scenario_analysis.breakeven_exit_multiple is not None
 
 
 def test_valuation_agent_requires_all_valuation_methods() -> None:

@@ -42,6 +42,7 @@ class StatementLineItemSchema(BaseModel):
     statement: SectionKind
     label: str
     raw_values: list[str]
+    parsed_values: list[float | None]
     source: SourceReferenceSchema
 
 
@@ -119,6 +120,7 @@ class DocumentIntelligenceReport(BaseModel):
                     statement=item.statement,
                     label=item.label,
                     raw_values=item.raw_values,
+                    parsed_values=item.parsed_values,
                     source=SourceReferenceSchema(
                         page_number=item.source.page_number,
                         excerpt=item.source.excerpt,
@@ -164,9 +166,32 @@ class DocumentIntelligenceReport(BaseModel):
         )
 
 
+class DocumentSummary(BaseModel):
+    """Lightweight listing entry -- avoids shipping every section/line-item for a library view."""
+
+    model_config = ConfigDict(frozen=True)
+
+    document_id: str
+    file_name: str
+    page_count: int = Field(ge=0)
+    risk_factor_count: int = Field(ge=0)
+    warning_count: int = Field(ge=0)
+
+    @classmethod
+    def from_report(cls, report: DocumentIntelligenceReport) -> DocumentSummary:
+        return cls(
+            document_id=report.document_id,
+            file_name=report.file_name,
+            page_count=report.page_count,
+            risk_factor_count=len(report.risk_factors),
+            warning_count=len(report.warnings),
+        )
+
+
 __all__ = [
     "DocumentIntelligenceReport",
     "DocumentSectionSchema",
+    "DocumentSummary",
     "ExtractedNoteSchema",
     "ExtractedRiskFactorSchema",
     "IndustryEvidenceSchema",

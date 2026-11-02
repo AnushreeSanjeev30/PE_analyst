@@ -39,6 +39,14 @@ class Settings(BaseSettings):
         le=65535,
     )
 
+    # Origins allowed to call the API from a browser (the frontend's dev/prod URLs).
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    )
+
     # ------------------------------------------------------------------
     # Logging
     # ------------------------------------------------------------------
@@ -55,11 +63,34 @@ class Settings(BaseSettings):
 
     openai_embedding_model: str = "text-embedding-3-small"
 
+    embedding_dimension: int = Field(default=1536, gt=0)
+
     anthropic_api_key: str | None = None
 
     gemini_api_key: str | None = None
 
     ollama_base_url: str = "http://127.0.0.1:11434"
+
+    # Groq (free tier, OpenAI-compatible) is the default provider for agent narration.
+    groq_api_key: str | None = None
+
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    xai_api_key: str | None = None
+
+    xai_model: str = "grok-4.3"
+
+    ollama_model: str = "llama3.1"
+
+    # Provider the agents narrate with: groq | xai | openai | anthropic | gemini | ollama.
+    # Agents fall back to deterministic text when this provider has no credentials.
+    llm_provider: str = "groq"
+
+    # Overrides the provider's default model when set.
+    llm_model: str | None = None
+
+    # Every agent LLM call is appended here as JSONL -- the raw material for fine-tuning.
+    llm_log_dir: Path | None = Path("data/llm_logs")
 
     llm_timeout_seconds: float = Field(default=60.0, gt=0)
 
@@ -73,7 +104,10 @@ class Settings(BaseSettings):
     # Vector Store
     # ------------------------------------------------------------------
 
-    vector_store_provider: str = "pgvector"
+    # "local" (default) needs no infrastructure -- a file-backed store under
+    # PROCESSED_DATA_DIR. Set to "pgvector" (as docker-compose.yml does for the
+    # containerized API) to use the real Postgres+pgvector-backed store instead.
+    vector_store_provider: str = "local"
 
     vector_collection_name: str = "pe_analyst_documents"
 
@@ -130,10 +164,35 @@ class Settings(BaseSettings):
     enable_agent_tracing: bool = True
 
     # ------------------------------------------------------------------
+    # Auth
+    # ------------------------------------------------------------------
+
+    # Dev-only placeholder. Every real deployment must override this via SECRET_KEY.
+    secret_key: str = "dev-only-insecure-secret-change-me"
+
+    algorithm: str = "HS256"
+
+    access_token_expire_minutes: int = Field(default=60, gt=0)
+
+    # ------------------------------------------------------------------
     # External Research
     # ------------------------------------------------------------------
 
     sec_user_agent: str | None = None
+
+    # ------------------------------------------------------------------
+    # Market Data
+    # ------------------------------------------------------------------
+
+    # "unconfigured" (default) or "alphavantage" (free key: alphavantage.co/support/#api-key).
+    market_data_provider: str = "unconfigured"
+
+    market_data_api_key: str | None = None
+
+    # Vendor responses are cached on disk so the free tier's daily quota goes further.
+    market_data_cache_dir: Path = Path("data/market_cache")
+
+    market_data_cache_ttl_hours: float = Field(default=24.0, ge=0.0)
 
     # ------------------------------------------------------------------
     # LBO Defaults

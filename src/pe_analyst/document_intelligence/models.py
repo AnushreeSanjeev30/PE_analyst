@@ -61,6 +61,11 @@ class StatementLineItem:
     label: str
     raw_values: list[str]
     source: SourceReference
+    # Parallel to raw_values: the numeric value the service could parse out of each raw string,
+    # or None where parsing failed (e.g. "n/a", a stray dash). Positional index-only mapping --
+    # deliberately not auto-mapped to specific FinancialStatement fields (revenue, COGS, ...),
+    # since that mapping is label-text-dependent and unreliable across companies.
+    parsed_values: list[float | None] = field(default_factory=list)
 
 
 @dataclass(slots=True, frozen=True)

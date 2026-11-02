@@ -23,19 +23,24 @@ class InvestmentCommitteeAgent(BaseAgent):
         self.tools.required_reports(state)
 
     def execute(self, state: AgentState) -> AgentResponse:
-        financial, valuation, risk, industry = self.tools.required_reports(state)
+        financial, valuation, risk, industry, due_diligence = self.tools.required_reports(state)
         votes = [
             self.tools.vote_financial(financial),
             self.tools.vote_valuation(valuation),
             self.tools.vote_risk(risk),
             self.tools.vote_industry(industry),
+            self.tools.vote_due_diligence(due_diligence),
         ]
         support_weight = sum(vote.weight for vote in votes if vote.outcome == "SUPPORT")
         recommendation = self._recommendation(
             support_weight, valuation.lbo_returns.irr, risk.summary.level.value
         )
+        if due_diligence.summary.assessment.value == "Critical":
+            recommendation = CommitteeRecommendation.REJECT
         confidence = min(0.95, max(0.35, support_weight * 0.85 + 0.10))
-        top_risks = [risk.title for risk in risk.major_risks][:3]
+        top_risks = [risk.title for risk in risk.major_risks][:3] + [
+            flag.title for flag in due_diligence.red_flags
+        ][:2]
         conditions = risk.mitigations if recommendation != CommitteeRecommendation.BUY else []
         report = InvestmentCommitteeReport(
             summary=InvestmentCommitteeSummary(

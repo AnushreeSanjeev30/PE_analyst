@@ -18,6 +18,43 @@ from .models import (
 )
 
 _NOTE_HEADER = re.compile(r"Note\s+\d+[.:]", re.IGNORECASE)
+_BLANK_VALUES = {"", "-", "—", "–", "n/a", "na", "nm"}
+_CURRENCY_CELLS = {"$", "€", "£", "¥", "₹"}
+
+
+def parse_numeric_value(raw: str) -> float | None:
+    """Parse a raw statement cell into a float, or None if it isn't a number.
+
+    Handles thousands separators, a leading currency symbol, a trailing percent sign, and
+    parentheses as the accounting convention for a negative value -- e.g. ``"(1,234)"`` -> -1234.0.
+    """
+
+    text = raw.strip()
+    if text.lower() in _BLANK_VALUES:
+        return None
+    negative = text.startswith("(") and text.endswith(")")
+    if negative:
+        text = text[1:-1]
+    text = text.replace(",", "").replace("$", "").replace("%", "").strip()
+    if not text:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return -value if negative else value
+
+
+def _label_end(values: list[str]) -> int:
+    """Index of the first value cell; earlier cells are the row label.
+
+    Whitespace-detected columns can split one label across cells ("Total" | "revenue").
+    """
+
+    for index, value in enumerate(values[1:], start=1):
+        if parse_numeric_value(value) is not None:
+            return index
+    return 1
 
 
 class DocumentIntelligenceService:
@@ -126,15 +163,21 @@ class DocumentIntelligenceService:
             )
             for table in page.tables:
                 for row in table.rows:
-                    values = [value.strip() for value in row if value and value.strip()]
+                    values = [
+                        value.strip()
+                        for value in row
+                        if value and value.strip() and value.strip() not in _CURRENCY_CELLS
+                    ]
                     if len(values) < 2 or not any(re.search(r"\d", value) for value in values[1:]):
                         continue
+                    split = _label_end(values)
                     result.append(
                         StatementLineItem(
                             kind,
-                            values[0],
-                            values[1:],
+                            " ".join(values[:split]),
+                            values[split:],
                             self._reference(" | ".join(values), page.page_number),
+                            [parse_numeric_value(value) for value in values[1:]],
                         )
                     )
         return result

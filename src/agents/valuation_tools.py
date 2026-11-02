@@ -11,9 +11,13 @@ from typing import Any
 
 from lbo.assumptions import LBOAssumptions
 from lbo.lbo_engine import LBOEngine
+from lbo.scenario import ScenarioEngine
 from lbo.schemas import OperatingProjection
+from lbo.sensitivity import SensitivityEngine
 from pe_analyst.valuation import DCFEngine, PeerCompany, ValuationAssumptions
 from pe_analyst.valuation.statistics import StatisticsEngine
+
+_DEFAULT_TARGET_IRR = 0.20
 
 
 class ValuationTools:
@@ -116,4 +120,27 @@ class ValuationTools:
         return {
             "result": asdict(LBOEngine(assumptions).run(projections)),
             "assumptions": asdict(assumptions),
+        }
+
+    def run_scenarios(
+        self, lbo_input: dict[str, Any], *, target_irr: float = _DEFAULT_TARGET_IRR
+    ) -> dict[str, Any]:
+        if "assumptions" not in lbo_input or "operating_projection" not in lbo_input:
+            raise ValueError("lbo input requires assumptions and operating_projection")
+        assumptions = self._coerce_lbo_assumptions(lbo_input["assumptions"])
+        projections = [self._coerce_projection(item) for item in lbo_input["operating_projection"]]
+        if len(projections) != assumptions.holding_period:
+            raise ValueError("LBO operating_projection length must equal holding_period")
+
+        outcomes = ScenarioEngine(assumptions, projections).run()
+        try:
+            breakeven = SensitivityEngine(assumptions, projections).breakeven_exit_multiple(
+                target_irr
+            )
+        except ValueError:
+            breakeven = None
+        return {
+            "target_irr": target_irr,
+            "outcomes": outcomes,
+            "breakeven_exit_multiple": breakeven,
         }

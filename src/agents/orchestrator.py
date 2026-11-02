@@ -4,31 +4,57 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from .base_agent import BaseAgent
+from .deal_partner_agent import DealPartnerAgent
+from .due_diligence_agent import DueDiligenceAgent
 from .financial_agent import FinancialAgent
+from .ic_chairperson_agent import ICChairpersonAgent
 from .industry_agent import IndustryAgent
 from .investment_agent import InvestmentCommitteeAgent
+from .memo_agent import InvestmentMemoAgent
+from .operating_partner_agent import OperatingPartnerAgent
 from .orchestrator_models import AgentRunRecord, DealAnalysisResult, RunStatus
 from .risk_agent import RiskAgent
+from .risk_officer_agent import RiskOfficerAgent
+from .scenario_agent import ScenarioAnalysisAgent
 from .state import AgentState
 from .valuation_agent import ValuationAgent
+
+if TYPE_CHECKING:
+    from .narration import Narrator
 
 
 class DealAnalysisOrchestrator:
     """Runs agents in underwriting order and persists a complete execution trace."""
 
-    def __init__(self, agents: Sequence[tuple[str, BaseAgent]] | None = None) -> None:
+    def __init__(
+        self,
+        agents: Sequence[tuple[str, BaseAgent]] | None = None,
+        *,
+        narrator: Narrator | None = None,
+    ) -> None:
         self.agents = list(
             agents
             or [
                 ("financial", FinancialAgent()),
                 ("valuation", ValuationAgent()),
+                ("scenario", ScenarioAnalysisAgent()),
                 ("risk", RiskAgent()),
+                ("due_diligence", DueDiligenceAgent()),
                 ("industry", IndustryAgent()),
                 ("investment_committee", InvestmentCommitteeAgent()),
+                ("deal_partner", DealPartnerAgent()),
+                ("risk_officer", RiskOfficerAgent()),
+                ("operating_partner", OperatingPartnerAgent()),
+                ("chairperson", ICChairpersonAgent()),
+                ("memo", InvestmentMemoAgent()),
             ]
         )
+        if narrator is not None:
+            for _, agent in self.agents:
+                agent.narrator = narrator
 
     def run(self, state: AgentState) -> DealAnalysisResult:
         result = DealAnalysisResult(status=RunStatus.RUNNING, started_at=self._now())

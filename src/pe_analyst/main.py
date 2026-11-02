@@ -3,16 +3,32 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from pe_analyst.auth.api import router as auth_router
+from pe_analyst.core.audit_middleware import AuditLoggingMiddleware
 from pe_analyst.core.config import get_settings
 from pe_analyst.core.logging import configure_logging
+from pe_analyst.deals.api import router as deals_router
 from pe_analyst.document_intelligence.api import router as document_intelligence_router
+from pe_analyst.rag.api import router as rag_router
 
 settings = get_settings()
 configure_logging(settings)
 
 app = FastAPI(title=settings.app_name)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(AuditLoggingMiddleware)
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(document_intelligence_router, prefix="/api/v1")
+app.include_router(rag_router, prefix="/api/v1")
+app.include_router(deals_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

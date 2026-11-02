@@ -1,0 +1,197 @@
+{
+  "id": "good-business-overpriced",
+  "split": "dev",
+  "input": {
+    "company_name": "SyntheticCo",
+    "current_financials": {
+      "revenue": 1000.0,
+      "cost_of_goods_sold": 600.0,
+      "ebitda": 220.0,
+      "ebit": 150.0,
+      "net_income": 100.0,
+      "operating_cash_flow": 140.0,
+      "capital_expenditure": 40.0,
+      "total_assets": 1000.0,
+      "shareholders_equity": 400.0,
+      "total_debt": 200.0,
+      "interest_expense": 20.0,
+      "current_assets": 200.0,
+      "inventory": 50.0,
+      "current_liabilities": 180.0
+    },
+    "previous_financials": {
+      "revenue": 900.0,
+      "cost_of_goods_sold": 560.0,
+      "ebitda": 190.0,
+      "ebit": 130.0,
+      "net_income": 85.0,
+      "operating_cash_flow": 120.0,
+      "capital_expenditure": 35.0,
+      "total_assets": 900.0,
+      "shareholders_equity": 350.0,
+      "total_debt": 210.0,
+      "interest_expense": 22.0,
+      "current_assets": 180.0,
+      "inventory": 45.0,
+      "current_liabilities": 170.0
+    },
+    "valuation_inputs": {
+      "current_price_per_share": 140.0,
+      "dcf": {
+        "revenue": 1000.0,
+        "assumptions": {
+          "revenue_growth": 0.08,
+          "ebit_margin": 0.2,
+          "cash": 100.0,
+          "debt": 200.0,
+          "shares_outstanding": 10.0
+        }
+      },
+      "comparables": {
+        "target": {
+          "revenue": 1000.0,
+          "ebitda": 220.0,
+          "cash": 100.0,
+          "debt": 200.0,
+          "shares_outstanding": 10.0
+        },
+        "peers": [
+          {
+            "name": "Peer A",
+            "enterprise_value": 1800.0,
+            "market_cap": 1600.0,
+            "revenue": 200.0,
+            "ebitda": 40.0,
+            "net_income": 20.0,
+            "book_value": 200.0
+          },
+          {
+            "name": "Peer B",
+            "enterprise_value": 2000.0,
+            "market_cap": 1750.0,
+            "revenue": 250.0,
+            "ebitda": 50.0,
+            "net_income": 25.0,
+            "book_value": 225.0
+          },
+          {
+            "name": "Peer C",
+            "enterprise_value": 1650.0,
+            "market_cap": 1400.0,
+            "revenue": 220.0,
+            "ebitda": 44.0,
+            "net_income": 22.0,
+            "book_value": 180.0
+          }
+        ]
+      },
+      "lbo": {
+        "assumptions": {
+          "purchase_price": 2600.0,
+          "holding_period": 5,
+          "exit_multiple": 8.0
+        },
+        "operating_projection": [
+          {
+            "year": 1,
+            "revenue": 1080.0,
+            "ebitda": 235.0,
+            "taxes": 31.0,
+            "capex": 31.0,
+            "change_in_nwc": 11.0
+          },
+          {
+            "year": 2,
+            "revenue": 1166.4,
+            "ebitda": 250.0,
+            "taxes": 32.0,
+            "capex": 32.0,
+            "change_in_nwc": 12.0
+          },
+          {
+            "year": 3,
+            "revenue": 1259.7120000000002,
+            "ebitda": 265.0,
+            "taxes": 33.0,
+            "capex": 33.0,
+            "change_in_nwc": 13.0
+          },
+          {
+            "year": 4,
+            "revenue": 1360.4889600000004,
+            "ebitda": 280.0,
+            "taxes": 34.0,
+            "capex": 34.0,
+            "change_in_nwc": 14.0
+          },
+          {
+            "year": 5,
+            "revenue": 1469.3280768000006,
+            "ebitda": 295.0,
+            "taxes": 35.0,
+            "capex": 35.0,
+            "change_in_nwc": 15.0
+          }
+        ]
+      }
+    },
+    "industry_inputs": {
+      "industry_name": "Vertical Software",
+      "market_growth_pct": 0.1,
+      "competitive_position": "Strong",
+      "competitors": [
+        {
+          "name": "Peer A",
+          "market_share_pct": 18.0,
+          "positioning": "Leader"
+        }
+      ],
+      "porter_forces": {
+        "rivalry": 3,
+        "buyer_power": 3
+      },
+      "management_themes": [
+        "Cross-sell expansion"
+      ],
+      "evidence": [
+        {
+          "topic": "market",
+          "source": "Annual Report",
+          "page_number": 12,
+          "excerpt": "Market demand remains steady.",
+          "claim": "Market demand remains steady.",
+          "confidence": 0.85
+        },
+        {
+          "topic": "competition",
+          "source": "Annual Report",
+          "page_number": 18,
+          "excerpt": "The market is fragmented.",
+          "claim": "The market is fragmented.",
+          "confidence": 0.85
+        },
+        {
+          "topic": "management",
+          "source": "Annual Report",
+          "page_number": 26,
+          "excerpt": "Management expects continued execution.",
+          "claim": "Management expects continued execution.",
+          "confidence": 0.85
+        }
+      ]
+    },
+    "risk_inputs": {
+      "altman_z": 3.2,
+      "piotroski_score": 7,
+      "industry_risk_score": 30
+    },
+    "due_diligence_inputs": []
+  },
+  "expected": "HOLD",
+  "metadata": {
+    "synthetic": true,
+    "label_source": "conventional PE heuristic -- replace with analyst labels",
+    "label_confidence": "low",
+    "rationale": "Healthy company, but the entry price leaves base IRR well under a 20% hurdle."
+  }
+}

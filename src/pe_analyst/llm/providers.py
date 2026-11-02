@@ -165,6 +165,69 @@ class GeminiProvider(LLMProvider):
         )
 
 
+class OpenAICompatibleChatProvider(LLMProvider):
+    """Any vendor exposing the OpenAI ``/chat/completions`` contract (Groq, xAI Grok, ...)."""
+
+    base_url: str
+    api_key_env: str
+
+    def __init__(self, api_key: str | None, timeout_seconds: float = 60.0) -> None:
+        if not api_key:
+            raise LLMConfigurationError(f"{self.api_key_env} is not configured")
+        self.client = httpx.Client(
+            base_url=self.base_url,
+            timeout=timeout_seconds,
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+    def generate(self, request: LLMRequest) -> LLMResponse:
+        messages = [
+            {"role": message.role, "content": message.content} for message in request.messages
+        ]
+        if request.system_prompt:
+            messages.insert(0, {"role": "system", "content": request.system_prompt})
+        payload: dict[str, Any] = {
+            "model": request.model,
+            "messages": messages,
+            "temperature": request.temperature,
+            "max_tokens": request.max_output_tokens,
+        }
+        if request.response_schema:
+            # json_object is the lowest common denominator across compatible vendors; the
+            # schema itself travels in the prompt and the caller validates the parsed result.
+            payload["response_format"] = {"type": "json_object"}
+        response = self.client.post("/chat/completions", json=payload)
+        self._raise(response)
+        body = response.json()
+        choices = body.get("choices") or [{}]
+        usage = body.get("usage", {})
+        return LLMResponse(
+            choices[0].get("message", {}).get("content") or "",
+            self.name,
+            request.model,
+            body.get("id"),
+            usage.get("prompt_tokens"),
+            usage.get("completion_tokens"),
+            body,
+        )
+
+
+class GroqProvider(OpenAICompatibleChatProvider):
+    """Groq's hosted open-weight models (Llama, gpt-oss) -- has a free tier."""
+
+    name = LLMProviderName.GROQ
+    base_url = "https://api.groq.com/openai/v1"
+    api_key_env = "GROQ_API_KEY"
+
+
+class XAIProvider(OpenAICompatibleChatProvider):
+    """xAI's Grok models (paid)."""
+
+    name = LLMProviderName.XAI
+    base_url = "https://api.x.ai/v1"
+    api_key_env = "XAI_API_KEY"
+
+
 class OllamaProvider(LLMProvider):
     name = LLMProviderName.OLLAMA
 

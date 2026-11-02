@@ -134,6 +134,15 @@ data/processed/*
 !data/processed/.gitkeep
 !data/samples/
 
+# LLM narration logs and fine-tuning exports can contain deal data; keep them local.
+data/llm_logs/
+data/finetune/
+data/market_cache/
+data/eval_reports/
+
+# EDGAR filings downloaded by scripts/build_edgar_cases.py (large, re-downloadable).
+src/pe_analyst/evaluation/datasets/*/samples/
+
 
 # ------------------------------------------------------------
 # Uploaded Documents

@@ -12,6 +12,8 @@ class LLMProviderName(StrEnum):
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
     OLLAMA = "ollama"
+    GROQ = "groq"
+    XAI = "xai"
 
 
 @dataclass(slots=True, frozen=True)

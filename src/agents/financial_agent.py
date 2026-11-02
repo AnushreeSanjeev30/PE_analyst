@@ -86,6 +86,7 @@ class FinancialAgent(BaseAgent):
 
         ratios = analysis["ratios"]
 
+        # The ratio engine returns ROE as a decimal (0.25 == 25%).
         roe = ratios.get("roe", 0)
         current_ratio = ratios.get(
             "current_ratio",
@@ -94,15 +95,15 @@ class FinancialAgent(BaseAgent):
 
         ############################################################
 
-        if roe > 20:
+        if roe > 0.20:
 
             health = FinancialHealth.EXCELLENT
 
-        elif roe > 15:
+        elif roe > 0.15:
 
             health = FinancialHealth.GOOD
 
-        elif roe > 10:
+        elif roe > 0.10:
 
             health = FinancialHealth.AVERAGE
 
@@ -138,7 +139,7 @@ class FinancialAgent(BaseAgent):
 
                 name="ROE",
 
-                value=roe,
+                value=roe * 100,
 
                 benchmark=15,
 
@@ -178,7 +179,7 @@ class FinancialAgent(BaseAgent):
 
         weaknesses = []
 
-        if roe > 20:
+        if roe > 0.20:
 
             strengths.append(
 
