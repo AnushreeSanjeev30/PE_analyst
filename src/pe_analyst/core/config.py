@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # Groq (free tier, OpenAI-compatible) is the default provider for agent narration.
     groq_api_key: str | None = None
 
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     xai_api_key: str | None = None
 

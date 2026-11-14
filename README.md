@@ -113,7 +113,7 @@ Engines include:
 
 ### AI and Agent Orchestration
 
-- Groq (default, free tier: Llama 3.3 70B / gpt-oss), with xAI Grok, OpenAI, Anthropic, Gemini
+- Groq (default, free tier: gpt-oss-120b), with xAI Grok, OpenAI, Anthropic, Gemini
   and Ollama as alternatives behind one provider-neutral `LLMService`
 
 ### Data Processing
@@ -186,6 +186,23 @@ There are three suites: document extraction, citation accuracy and recommendatio
 See `src/pe_analyst/evaluation/datasets/README.md`. Every LLM call is logged in chat
 fine-tuning format to `data/llm_logs/`. Reviewing those logs is how the fine-tuning dataset gets
 built.
+
+## Run with Docker
+
+```bash
+cp .env.example .env        # then set SECRET_KEY and, optionally, GROQ_API_KEY
+docker compose up --build
+```
+
+This starts Postgres with pgvector, the API on http://localhost:8000 (migrations run on start)
+and the frontend on http://localhost:5173.
+
+Two settings matter when the frontend and API are not both on localhost:
+
+- `VITE_API_BASE_URL`: the API URL the browser calls. It is baked into the frontend at build
+  time, so rebuild the frontend image after changing it.
+- `CORS_ORIGINS`: a JSON list of the frontend origins the API accepts, for example
+  `CORS_ORIGINS=["https://your-frontend.example.com"]`.
 
 ## Development Setup
 

@@ -34,6 +34,20 @@ services:
       postgres:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The URL the browser uses to reach the API. Baked in at build time, so changing it
+        # needs "docker compose build frontend".
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    ports:
+      # Served on 5173 so it matches the API's default CORS_ORIGINS. If you serve it anywhere
+      # else, set CORS_ORIGINS in .env to that origin.
+      - "5173:80"
+    depends_on:
+      - api
+
 volumes:
   pe_analyst_postgres_data:
   pe_analyst_uploads:
