@@ -1,3 +1,4 @@
+from pe_analyst.llm.exceptions import LLMProviderError
 from pe_analyst.llm.models import LLMProviderName, LLMRequest, LLMResponse
 from pe_analyst.llm.service import LLMService
 from pe_analyst.rag.answering import RAGService
@@ -95,3 +96,26 @@ def test_answer_falls_back_when_requested_provider_is_not_registered() -> None:
 
     assert "Some evidence." in result.answer
     assert result.warnings
+
+
+class _RateLimitedProvider:
+    name = LLMProviderName.OPENAI
+
+    def generate(self, request: LLMRequest) -> LLMResponse:
+        raise LLMProviderError("Provider request failed: 429 rate limit reached")
+
+
+def test_answer_falls_back_to_excerpts_when_the_llm_is_rate_limited() -> None:
+    """Regression: a 429 from the provider used to surface as a 500 from /rag/query."""
+
+    llm_service = LLMService({LLMProviderName.OPENAI: _RateLimitedProvider()})
+    retrieval = FakeRetrieval([_chunk_result(4, "Top customer is 30% of revenue.", 0.8)])
+    service = RAGService(
+        retrieval, llm_service, provider=LLMProviderName.OPENAI, model="gpt-5-mini"
+    )
+
+    result = service.answer("How concentrated are customers?")
+
+    assert "Top customer is 30% of revenue." in result.answer
+    assert result.citations[0].page_number == 4
+    assert "429" in result.warnings[0]

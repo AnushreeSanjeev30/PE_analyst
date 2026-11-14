@@ -26,7 +26,9 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/pe_analyst
       VECTOR_STORE_PROVIDER: pgvector
     ports:
-      - "8000:8000"
+      # Host port is configurable for machines where 8000 is taken: set API_PORT, and point
+      # the frontend at it with VITE_API_BASE_URL=http://localhost:<API_PORT>/api/v1.
+      - "${API_PORT:-8000}:8000"
     volumes:
       - pe_analyst_uploads:/app/data/uploads
       - pe_analyst_processed:/app/data/processed

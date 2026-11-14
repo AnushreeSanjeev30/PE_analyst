@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from pe_analyst.core.config import Settings
+from pe_analyst.llm.exceptions import LLMServiceError
 from pe_analyst.llm.factory import select_provider
 from pe_analyst.llm.models import LLMMessage, LLMProviderName, LLMRequest
 from pe_analyst.llm.service import LLMService
@@ -88,7 +89,20 @@ class RAGService:
                 model=self.model,
                 system_prompt=_SYSTEM_PROMPT,
             )
-            response = self.llm_service.generate(self.provider, request)
+            try:
+                response = self.llm_service.generate(self.provider, request)
+            except LLMServiceError as error:
+                # Rate limits and outages are routine on free tiers. The evidence was still
+                # found, so hand it back rather than failing the whole request.
+                return RAGAnswer(
+                    self._fallback_answer(retrieved),
+                    citations,
+                    confidence * 0.5,
+                    [
+                        "The language model could not write an answer, so the top matching "
+                        f"excerpts are shown instead. Try again shortly. ({error})"[:400]
+                    ],
+                )
             return RAGAnswer(response.text.strip(), citations, confidence, [])
 
         return RAGAnswer(
