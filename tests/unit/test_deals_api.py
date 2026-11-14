@@ -1,8 +1,12 @@
+from collections.abc import Callable
+
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from pe_analyst.auth.dependencies import get_current_user
 from pe_analyst.auth.models import UserPublic
 from pe_analyst.core.config import Settings, get_settings
+from pe_analyst.document_intelligence.repository import DocumentRepository
 from pe_analyst.document_intelligence.schemas import (
     DocumentIntelligenceReport,
     ExtractedRiskFactorSchema,
@@ -185,7 +189,20 @@ def test_analyze_deal_with_explicit_inputs_returns_a_completed_report(
         app.dependency_overrides.clear()
 
 
-def test_analyze_deal_derives_evidence_from_a_stored_document(test_settings: Settings) -> None:
+def _store_owned(
+    report: DocumentIntelligenceReport,
+    settings: Settings,
+    app_db: Callable[[], Session],
+    owner_id: str = "test-user",
+) -> None:
+    DocumentReportStore.save(report, settings)
+    with app_db() as session:
+        DocumentRepository(session).record(report, owner_id)
+
+
+def test_analyze_deal_derives_evidence_from_a_stored_document(
+    test_settings: Settings, app_db: Callable[[], Session]
+) -> None:
     client = _client(test_settings)
     try:
         report = DocumentIntelligenceReport(
@@ -233,7 +250,7 @@ def test_analyze_deal_derives_evidence_from_a_stored_document(test_settings: Set
             ],
             warnings=[],
         )
-        DocumentReportStore.save(report, test_settings)
+        _store_owned(report, test_settings, app_db)
 
         body = _request_body(
             document_id="doc-123",
@@ -268,7 +285,7 @@ def test_analyze_deal_404s_for_an_unknown_document_id(test_settings: Settings) -
 
 
 def test_analyze_deal_requires_industry_name_when_deriving_from_a_document(
-    test_settings: Settings,
+    test_settings: Settings, app_db: Callable[[], Session]
 ) -> None:
     client = _client(test_settings)
     try:
@@ -284,7 +301,7 @@ def test_analyze_deal_requires_industry_name_when_deriving_from_a_document(
             industry_evidence=[],
             warnings=[],
         )
-        DocumentReportStore.save(report, test_settings)
+        _store_owned(report, test_settings, app_db)
 
         body = _request_body(document_id="doc-456")
         del body["industry_inputs"]

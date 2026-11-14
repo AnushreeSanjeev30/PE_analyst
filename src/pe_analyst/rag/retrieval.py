@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from pe_analyst.core.config import Settings
@@ -51,7 +52,12 @@ class RetrievalService:
         return len(chunks)
 
     def retrieve(
-        self, question: str, *, document_id: str | None = None, top_k: int | None = None
+        self,
+        question: str,
+        *,
+        document_id: str | None = None,
+        top_k: int | None = None,
+        document_ids: Sequence[str] | None = None,
     ) -> list[RetrievedChunk]:
         """Rank stored chunks against ``question``.
 
@@ -59,13 +65,21 @@ class RetrievalService:
         candidates and reranks down to ``settings.rerank_top_k`` via ``self.reranker`` -- the
         LLM-scored ``LLMReranker`` when one was built with an available provider, otherwise a
         plain score-sorted slice.
+
+        ``document_ids`` restricts the search to that set of documents (an empty set matches
+        nothing); it combines with ``document_id`` when both are given.
         """
 
         vector = self.embeddings.embed([question])[0]
         if top_k is not None:
-            return self.store.query(vector, top_k, document_id=document_id)
+            return self.store.query(
+                vector, top_k, document_id=document_id, document_ids=document_ids
+            )
         retrieved = self.store.query(
-            vector, self.settings.retrieval_top_k, document_id=document_id
+            vector,
+            self.settings.retrieval_top_k,
+            document_id=document_id,
+            document_ids=document_ids,
         )
         return self.reranker.rerank(question, retrieved, self.settings.rerank_top_k)
 

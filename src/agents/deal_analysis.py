@@ -45,6 +45,10 @@ class DealAnalysisInputs:
     which shapes a document's extracted risk factors and notes for this
     field) that the Due Diligence Agent scores for red flags; an empty or
     omitted list means no diligence evidence was supplied, not a clean bill.
+    ``financial_evidence`` optionally traces the financial statements to the document
+    lines they were read from (see ``document_intelligence.agent_inputs.
+    build_financial_evidence``); the decision explanation cites it. Leave it empty when
+    the statements were typed in rather than extracted.
     """
 
     company_name: str
@@ -54,6 +58,7 @@ class DealAnalysisInputs:
     risk_inputs: dict[str, Any] | None = None
     due_diligence_inputs: list[dict[str, Any]] | None = None
     scenario_inputs: dict[str, Any] | None = None
+    financial_evidence: list[dict[str, Any]] | None = None
 
 
 @dataclass(slots=True)
@@ -94,6 +99,7 @@ def build_agent_state(inputs: DealAnalysisInputs) -> AgentState:
     if inputs.risk_inputs is not None:
         state.metadata["risk_inputs"] = inputs.risk_inputs
     state.metadata["due_diligence_inputs"] = inputs.due_diligence_inputs or []
+    state.metadata["financial_evidence"] = inputs.financial_evidence or []
     if inputs.scenario_inputs is not None:
         state.metadata["scenario_inputs"] = inputs.scenario_inputs
     return state

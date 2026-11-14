@@ -113,7 +113,7 @@ Engines include:
 
 ### AI and Agent Orchestration
 
-- Groq (default, free tier: Llama 3.3 70B / gpt-oss), with xAI Grok, OpenAI, Anthropic, Gemini
+- Groq (default, free tier: gpt-oss-120b), with xAI Grok, OpenAI, Anthropic, Gemini
   and Ollama as alternatives behind one provider-neutral `LLMService`
 
 ### Data Processing
@@ -142,6 +142,42 @@ Engines include:
 The full workflow is implemented: upload PDF → extraction → specialist agents → IC debate →
 memo. It runs behind an authenticated FastAPI backend with a React frontend, Postgres and
 pgvector, Docker and CI.
+
+## What the analyst gets back
+
+Not just BUY / HOLD / REJECT. Every ruling comes with a **decision explanation**
+(`ic_decision.explanation`, built in `src/agents/decision_explanation.py`):
+
+- The rule that decided it, in plain words: the scorecard result, a Risk Officer veto, or a cap
+  to HOLD.
+- Each of the five scorecard areas, whether it counted for or against the deal, and its weight.
+- What each conclusion rests on: **Document evidence** (quoted passages with file and page),
+  **Calculated** (an engine's output from the inputs), or **Analyst input** (typed in for the
+  run). The three deserve different levels of trust, so they are labelled.
+- The quoted passages themselves: the risk-factor text behind a red flag, the industry
+  excerpts, and the statement lines each financial figure was read from.
+- What would have to change for a different ruling, the conditions to settle before signing,
+  and the gaps in the evidence.
+
+The explanation is assembled from fixed rules with no LLM, so it cannot disagree with the
+decision. The same content is written into the memo as "Decision Rationale and Evidence".
+
+## Saved analyses and background runs
+
+`POST /api/v1/deals/analyses` starts a run in the background and returns an id;
+`GET /api/v1/deals/analyses/{id}` returns its status and, once finished, the full report.
+`GET /api/v1/deals/analyses` lists your history. The frontend uses these, so a long narrated
+run cannot hit a proxy timeout and a finished report can be reopened without re-running it.
+`POST /api/v1/deals/analyze` still blocks and returns the report, and saves it too.
+
+Runs execute inside the API process. If the process restarts mid-run, that analysis is marked
+failed on startup and must be run again. Use a job queue before running more than one worker.
+
+## Who can see what
+
+Documents, document search and saved analyses belong to the user who created them. Another
+user gets a 404 for them. A user whose role is `admin` can see everything. Documents uploaded
+before ownership was added have no owner and are hidden; upload them again.
 
 ## How the LLM is used
 
@@ -173,6 +209,13 @@ MARKET_DATA_API_KEY=...
 Responses are cached for 24 hours in `data/market_cache/`, because the free tier allows about 25
 calls a day.
 
+## Document search quality
+
+Search over uploaded documents needs an embedding model. `EMBEDDING_PROVIDER=auto` (the default)
+uses OpenAI when `OPENAI_API_KEY` is set, otherwise Gemini when `GEMINI_API_KEY` is set (free
+tier), otherwise an offline fallback that only matches exact words. Set one of the two keys for
+real semantic search, then upload documents again so they are re-indexed.
+
 ## Evaluation and fine-tuning
 
 ```bash
@@ -186,6 +229,26 @@ There are three suites: document extraction, citation accuracy and recommendatio
 See `src/pe_analyst/evaluation/datasets/README.md`. Every LLM call is logged in chat
 fine-tuning format to `data/llm_logs/`. Reviewing those logs is how the fine-tuning dataset gets
 built.
+
+## Run with Docker
+
+```bash
+cp .env.example .env        # then set SECRET_KEY and, optionally, GROQ_API_KEY
+docker compose up --build
+```
+
+This starts Postgres with pgvector, the API on http://localhost:8000 (migrations run on start)
+and the frontend on http://localhost:5173.
+
+`SECRET_KEY` must be a unique value of at least 32 characters when `APP_ENV=production`; the
+app refuses to start otherwise.
+
+Two settings matter when the frontend and API are not both on localhost:
+
+- `VITE_API_BASE_URL`: the API URL the browser calls. It is baked into the frontend at build
+  time, so rebuild the frontend image after changing it.
+- `CORS_ORIGINS`: a JSON list of the frontend origins the API accepts, for example
+  `CORS_ORIGINS=["https://your-frontend.example.com"]`.
 
 ## Development Setup
 

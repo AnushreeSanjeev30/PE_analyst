@@ -1,9 +1,11 @@
 """A pluggable vector store, with a local file-backed default.
 
-No Postgres/pgvector infrastructure exists yet (that's Phase 12), so ``LocalVectorStore`` is the
-only implementation today. It stores everything in one JSON file and does a linear cosine-similarity
-scan on query -- fine at the scale of a handful of deal documents. A future ``PgVectorStore`` can
-implement the same :class:`VectorStore` interface without touching any caller.
+``LocalVectorStore`` stores everything in one JSON file and does a linear cosine-similarity scan
+on query -- fine at the scale of a handful of deal documents. ``PgVectorStore`` implements the
+same :class:`VectorStore` interface on Postgres+pgvector.
+
+Queries can be limited to one document (``document_id``) or to a set (``document_ids``); the API
+uses the set form to keep a search inside the documents the caller is allowed to read.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import json
 import math
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +28,12 @@ class VectorStore(ABC):
 
     @abstractmethod
     def query(
-        self, vector: list[float], top_k: int, *, document_id: str | None = None
+        self,
+        vector: list[float],
+        top_k: int,
+        *,
+        document_id: str | None = None,
+        document_ids: Sequence[str] | None = None,
     ) -> list[RetrievedChunk]: ...
 
 
@@ -59,13 +67,19 @@ class LocalVectorStore(VectorStore):
         self._save()
 
     def query(
-        self, vector: list[float], top_k: int, *, document_id: str | None = None
+        self,
+        vector: list[float],
+        top_k: int,
+        *,
+        document_id: str | None = None,
+        document_ids: Sequence[str] | None = None,
     ) -> list[RetrievedChunk]:
-        candidates = (
-            self._records
-            if document_id is None
-            else [record for record in self._records if record["document_id"] == document_id]
-        )
+        candidates = self._records
+        if document_id is not None:
+            candidates = [item for item in candidates if item["document_id"] == document_id]
+        if document_ids is not None:
+            allowed = set(document_ids)
+            candidates = [item for item in candidates if item["document_id"] in allowed]
         scored = [
             RetrievedChunk(
                 Chunk(record["id"], record["document_id"], record["page_number"], record["text"]),

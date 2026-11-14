@@ -13,7 +13,7 @@ from agents import (
 from agents.due_diligence_models import DueDiligenceAssessment
 from agents.financial_models import FinancialHealth
 from agents.ic_simulation_models import PartnerPosition, RiskOfficerVerdict, ValueCreationPotential
-from agents.industry_models import CompetitivePosition
+from agents.industry_models import CompetitivePosition, SourceCitation
 from agents.investment_models import CommitteeRecommendation
 from agents.risk_models import RiskLevel
 
@@ -35,7 +35,11 @@ def _state(
     bull_irr: float = 0.30,
     management_themes: list[str] | None = None,
 ) -> AgentState:
-    financial = SimpleNamespace(summary=SimpleNamespace(health=health))
+    financial = SimpleNamespace(
+        summary=SimpleNamespace(health=health),
+        strengths=[SimpleNamespace(title="Strong cash conversion")],
+        weaknesses=[],
+    )
     scenario_analysis = SimpleNamespace(
         outcomes=[
             _scenario("Bear", bear_irr, 7.0),
@@ -47,19 +51,36 @@ def _state(
         summary=SimpleNamespace(upside_downside_pct=upside, fair_value_per_share=125.0),
         lbo_returns=SimpleNamespace(irr=irr),
         scenario_analysis=scenario_analysis,
+        methods=[SimpleNamespace(name="DCF", value_per_share=125.0, weight=0.5)],
     )
     risk = SimpleNamespace(
         summary=SimpleNamespace(level=risk_level, score=35.0),
-        major_risks=[SimpleNamespace(title="Customer concentration")],
+        major_risks=[
+            SimpleNamespace(
+                title="Customer concentration",
+                severity=RiskLevel.HIGH,
+                description="Top customer is 30% of revenue.",
+            )
+        ],
         mitigations=["Validate customer retention."],
+        missing_data=[],
     )
     industry = SimpleNamespace(
         summary=SimpleNamespace(competitive_position=position),
         management_themes=management_themes or ["Cross-sell expansion"],
+        findings=[
+            SimpleNamespace(
+                title="Market outlook",
+                analysis="Demand is growing.",
+                citations=[SourceCitation("CIM.pdf", 12, "Market demand remains strong.", 0.9)],
+            )
+        ],
+        evidence_count=3,
     )
     due_diligence = SimpleNamespace(
         summary=SimpleNamespace(assessment=dd_assessment, red_flag_count=0),
         red_flags=[],
+        items_reviewed=4,
     )
     return AgentState(
         company_name="ExampleCo",
@@ -159,6 +180,37 @@ def test_chairperson_veto_overrides_a_buy_from_the_scorecard() -> None:
 
     assert decision.final_recommendation == "REJECT"
     assert decision.risk_officer.verdict == RiskOfficerVerdict.VETO
+    assert "vetoed" in decision.explanation.deciding_rule
+
+
+def test_decision_explanation_names_every_driver_and_quotes_its_source() -> None:
+    state = _state(position=CompetitivePosition.WEAK, irr=0.15, bear_irr=0.02)
+    _run_committee_and_personas(state)
+
+    decision = ICChairpersonAgent().run(state).metadata["decision"]
+    explanation = decision.explanation
+
+    assert explanation.recommendation == decision.final_recommendation
+    assert {driver.area for driver in explanation.drivers} == {
+        "Financial health",
+        "Valuation",
+        "Risk",
+        "Industry",
+        "Due diligence",
+    }
+    # Concerns lead, so the reader sees what counted against the deal first.
+    assert explanation.recommendation == "HOLD"
+    assert explanation.drivers[0].area == "Valuation"
+    assert explanation.drivers[0].direction.value == "Against"
+    industry = next(driver for driver in explanation.drivers if driver.area == "Industry")
+    assert industry.direction.value == "Against"
+    assert industry.evidence[0].page_number == 12
+    assert industry.evidence[0].excerpt == "Market demand remains strong."
+    # No document-traced financials were supplied, and the explanation says so.
+    financial = next(d for d in explanation.drivers if d.area == "Financial health")
+    assert financial.basis == "Analyst input"
+    assert any("entered by hand" in gap for gap in explanation.evidence_gaps)
+    assert any("Industry" in item for item in explanation.what_would_change)
 
 
 def test_chairperson_downgrades_buy_to_hold_on_conditional_risk_verdict() -> None:

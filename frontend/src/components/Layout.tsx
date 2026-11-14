@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 const NAV_ITEMS = [
   { to: "/documents", label: "Documents" },
   { to: "/analysis/new", label: "New Analysis" },
+  { to: "/analyses", label: "Analyses" },
   { to: "/sensitivity", label: "Sensitivity Explorer" },
 ];
 

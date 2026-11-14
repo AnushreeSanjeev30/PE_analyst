@@ -53,6 +53,7 @@ class InvestmentMemoAgent(BaseAgent):
             self._scenarios(meta.get("scenario_report")),
             self._risks(meta.get("risk_report"), meta.get("due_diligence_report")),
             self._decision(decision),
+            self._rationale(decision),
             self._next_steps(decision),
         ]
         memo = InvestmentMemo(state.company_name, decision.final_recommendation, sections)
@@ -198,6 +199,29 @@ class InvestmentMemoAgent(BaseAgent):
             f"{decision.final_recommendation}. {decision.chair_rationale}",
             bullets,
         )
+
+    @staticmethod
+    def _rationale(decision: Any) -> MemoSection:
+        """Why the committee ruled as it did, quoting the document passages behind each driver."""
+
+        explanation = decision.explanation
+        if explanation is None:
+            return MemoSection("Decision Rationale and Evidence", "No rationale was recorded.")
+        bullets: list[str] = []
+        for driver in explanation.drivers:
+            weight = "" if driver.weight is None else f", {driver.weight:.0%} weight"
+            bullets.append(
+                f"{driver.area} ({driver.direction.value}{weight}; {driver.basis}): "
+                f"{driver.statement}"
+            )
+            bullets += [
+                f'Source for {driver.area} - {citation.source}, p. {citation.page_number}: '
+                f'"{citation.excerpt}"'
+                for citation in driver.evidence
+            ]
+        bullets += [f"Would change the ruling: {item}" for item in explanation.what_would_change]
+        bullets += [f"Evidence gap: {item}" for item in explanation.evidence_gaps]
+        return MemoSection("Decision Rationale and Evidence", explanation.headline, bullets)
 
     @staticmethod
     def _next_steps(decision: Any) -> MemoSection:

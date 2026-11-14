@@ -96,6 +96,7 @@ def test_memo_covers_every_section_with_figures_from_the_reports() -> None:
         "Returns and Scenarios",
         "Key Risks and Diligence",
         "Committee Decision",
+        "Decision Rationale and Evidence",
         "Next Steps",
     ]
     lbo_irr = report.valuation_report.lbo_returns.irr

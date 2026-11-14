@@ -1,17 +1,38 @@
 """Shared pytest fixtures for PE-Analyst."""
 
-from collections.abc import Generator
-from pathlib import Path
-from uuid import UUID, uuid4
+import os
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
+# Must be set before any pe_analyst import reads the settings. Without it every API request in
+# the suite tries to write an audit row to the developer's real DATABASE_URL, and waits out a
+# connection timeout each time that database is not running.
+os.environ["AUDIT_LOG_ENABLED"] = "false"
 
-from pe_analyst.core.config import Settings
-from pe_analyst.core.enums import Environment
-from pe_analyst.db.base import Base
+from collections.abc import Callable, Generator  # noqa: E402
+from pathlib import Path  # noqa: E402
+from uuid import UUID, uuid4  # noqa: E402
+
+import pytest  # noqa: E402
+from sqlalchemy import Engine, create_engine  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from pe_analyst.core.config import Settings  # noqa: E402
+from pe_analyst.core.enums import Environment  # noqa: E402
+from pe_analyst.db.base import Base  # noqa: E402
+from pe_analyst.db.session import get_db_session, get_session_factory  # noqa: E402
+
+# Every table except ``vector_chunks``, whose pgvector column type SQLite cannot create.
+_SQLITE_TABLES = ("users", "audit_log", "documents", "deal_analyses")
+
+
+def _sqlite_engine() -> Engine:
+    engine = create_engine(
+        "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(
+        engine, tables=[Base.metadata.tables[name] for name in _SQLITE_TABLES]
+    )
+    return engine
 
 
 @pytest.fixture
@@ -45,13 +66,37 @@ def db_session() -> Generator[Session, None, None]:
     self-skip when a real Postgres isn't reachable).
     """
 
-    engine = create_engine(
-        "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-    tables = [Base.metadata.tables["users"], Base.metadata.tables["audit_log"]]
-    Base.metadata.create_all(engine, tables=tables)
+    engine = _sqlite_engine()
     with Session(engine) as session:
         yield session
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def app_db() -> Generator[Callable[[], Session], None, None]:
+    """Point the FastAPI app at a private in-memory database for every test.
+
+    Document ownership and saved analyses live in the database, so any test that calls those
+    endpoints needs one. Yields a session factory for tests that want to seed or inspect rows.
+    A test may still override ``get_db_session`` itself (the auth tests do).
+    """
+
+    from pe_analyst.main import app
+
+    engine = _sqlite_engine()
+
+    def factory() -> Session:
+        return Session(engine)
+
+    def session_dependency() -> Generator[Session, None, None]:
+        with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = session_dependency
+    app.dependency_overrides[get_session_factory] = lambda: factory
+    yield factory
+    app.dependency_overrides.pop(get_db_session, None)
+    app.dependency_overrides.pop(get_session_factory, None)
     engine.dispose()
 
 

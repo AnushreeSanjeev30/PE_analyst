@@ -25,6 +25,8 @@ eggs/
 
 lib/
 lib64/
+# The Python-template "lib/" rule above must not swallow the frontend API client.
+!frontend/src/lib/
 
 parts/
 sdist/

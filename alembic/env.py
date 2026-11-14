@@ -9,7 +9,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pe_analyst.core.config import get_settings  # noqa: E402
 from pe_analyst.db.base import Base  # noqa: E402
-from pe_analyst.db.models import AuditLogModel, UserModel, VectorChunkModel  # noqa: E402, F401
+from pe_analyst.db.models import (  # noqa: E402, F401
+    AuditLogModel,
+    DealAnalysisModel,
+    DocumentModel,
+    UserModel,
+    VectorChunkModel,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

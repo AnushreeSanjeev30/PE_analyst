@@ -3,12 +3,20 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pe_analyst.core.enums import Environment
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+DEFAULT_SECRET_KEY = "dev-only-insecure-secret-change-me"
+
+# Values that must never sign tokens in production: the built-in default and the
+# placeholder shipped in .env.example.
+_PLACEHOLDER_SECRET_KEYS = {DEFAULT_SECRET_KEY, "change-me-to-a-long-random-value"}
+
+MIN_PRODUCTION_SECRET_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -65,6 +73,13 @@ class Settings(BaseSettings):
 
     embedding_dimension: int = Field(default=1536, gt=0)
 
+    # Which model turns text into search vectors: "auto" | "openai" | "gemini" | "local".
+    # "auto" picks OpenAI when OPENAI_API_KEY is set, then Gemini (free tier) when
+    # GEMINI_API_KEY is set, and otherwise the offline keyword-hashing fallback.
+    embedding_provider: str = "auto"
+
+    gemini_embedding_model: str = "gemini-embedding-001"
+
     anthropic_api_key: str | None = None
 
     gemini_api_key: str | None = None
@@ -74,7 +89,7 @@ class Settings(BaseSettings):
     # Groq (free tier, OpenAI-compatible) is the default provider for agent narration.
     groq_api_key: str | None = None
 
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     xai_api_key: str | None = None
 
@@ -99,6 +114,12 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/pe_analyst"
+
+    # Give up on an unreachable database quickly instead of hanging the request.
+    db_connect_timeout_seconds: int = Field(default=5, gt=0)
+
+    # One audit_log row per API request. Disable where no database is available.
+    audit_log_enabled: bool = True
 
     # ------------------------------------------------------------------
     # Vector Store
@@ -168,7 +189,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
 
     # Dev-only placeholder. Every real deployment must override this via SECRET_KEY.
-    secret_key: str = "dev-only-insecure-secret-change-me"
+    secret_key: str = DEFAULT_SECRET_KEY
 
     algorithm: str = "HS256"
 
@@ -273,6 +294,24 @@ class Settings(BaseSettings):
             raise ValueError(message)
 
         return value
+
+    @model_validator(mode="after")
+    def validate_production_secret_key(self) -> "Settings":
+        """Refuse to start in production with a guessable token-signing key."""
+
+        if self.app_env != Environment.PRODUCTION:
+            return self
+        if (
+            self.secret_key in _PLACEHOLDER_SECRET_KEYS
+            or len(self.secret_key) < MIN_PRODUCTION_SECRET_KEY_LENGTH
+        ):
+            message = (
+                "SECRET_KEY must be set to a unique random value of at least "
+                f"{MIN_PRODUCTION_SECRET_KEY_LENGTH} characters when APP_ENV=production. "
+                'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+            raise ValueError(message)
+        return self
 
     # ------------------------------------------------------------------
     # Environment Helpers

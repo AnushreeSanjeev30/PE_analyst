@@ -205,3 +205,37 @@ class ChairpersonTools:
             f"final ruling is {final}."
         )
         return final, dissent, rationale
+
+    @staticmethod
+    def deciding_rule(
+        committee_recommendation: str,
+        deal_partner: DealPartnerOpinion,
+        risk_officer: RiskOfficerOpinion,
+    ) -> str:
+        """Plain-language statement of which branch of :meth:`rule` set the final ruling.
+
+        Mirrors the if/elif chain in :meth:`rule` exactly; change both together.
+        """
+
+        if risk_officer.verdict == RiskOfficerVerdict.VETO:
+            return (
+                f"The Risk Officer vetoed the deal, which overrides the scorecard's "
+                f"{committee_recommendation}: {risk_officer.rationale}"
+            )
+        if (
+            risk_officer.verdict == RiskOfficerVerdict.CONDITIONAL
+            and committee_recommendation == "BUY"
+        ):
+            return (
+                "The scorecard supported a BUY, but the Risk Officer's approval is conditional, "
+                f"so the ruling is capped at HOLD: {risk_officer.rationale}"
+            )
+        if deal_partner.position == PartnerPosition.OPPOSE and committee_recommendation == "BUY":
+            return (
+                "The scorecard supported a BUY, but the Deal Partner opposes the deal, so the "
+                f"ruling is capped at HOLD: {deal_partner.rationale}"
+            )
+        return (
+            f"The weighted scorecard recommended {committee_recommendation} and no committee "
+            "member overrode it."
+        )
