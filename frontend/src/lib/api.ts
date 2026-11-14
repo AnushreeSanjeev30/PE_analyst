@@ -1,6 +1,8 @@
 import axios, { AxiosError } from "axios";
 import type {
+  DealAnalysisRecord,
   DealAnalysisRequest,
+  DealAnalysisSummary,
   DocumentIntelligenceReport,
   DocumentSummary,
   RAGAnswer,
@@ -135,9 +137,30 @@ export async function queryRag(request: RAGQueryRequest): Promise<RAGAnswer> {
 // Deals
 // ---------------------------------------------------------------------------
 
+/** Runs an analysis and waits for it. Prefer startAnalysis: a narrated run can take minutes. */
 export async function analyzeDeal(request: DealAnalysisRequest): Promise<UnifiedDealReport> {
   const { data } = await client.post<UnifiedDealReport>("/deals/analyze", request);
   return data;
+}
+
+/** Starts an analysis in the background; poll getAnalysis(id) until it completes or fails. */
+export async function startAnalysis(request: DealAnalysisRequest): Promise<DealAnalysisSummary> {
+  const { data } = await client.post<DealAnalysisSummary>("/deals/analyses", request);
+  return data;
+}
+
+export async function listAnalyses(): Promise<DealAnalysisSummary[]> {
+  const { data } = await client.get<DealAnalysisSummary[]>("/deals/analyses");
+  return data;
+}
+
+export async function getAnalysis(analysisId: string): Promise<DealAnalysisRecord> {
+  const { data } = await client.get<DealAnalysisRecord>(`/deals/analyses/${analysisId}`);
+  return data;
+}
+
+export async function deleteAnalysis(analysisId: string): Promise<void> {
+  await client.delete(`/deals/analyses/${analysisId}`);
 }
 
 export async function sensitivityGrid(request: SensitivityRequest): Promise<SensitivityGrid> {

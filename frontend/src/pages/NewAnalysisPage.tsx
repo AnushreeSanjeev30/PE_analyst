@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { DEFAULT_FINANCIALS, FinancialStatementFields } from "../components/FinancialStatementFields";
-import { analyzeDeal, extractErrorMessage, listDocuments } from "../lib/api";
+import { extractErrorMessage, listDocuments, startAnalysis } from "../lib/api";
 import type { DealAnalysisRequest, DocumentSummary, FinancialStatementInput } from "../lib/types";
 
 const DEFAULT_VALUATION_INPUTS = {
@@ -75,6 +75,8 @@ export function NewAnalysisPage() {
 
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [documentId, setDocumentId] = useState<string>("");
+  // Read the two financial statements from the selected document instead of typing them in.
+  const [useDocumentFinancials, setUseDocumentFinancials] = useState(true);
   const [industryName, setIndustryName] = useState("Vertical Software");
   const [industryInputsText, setIndustryInputsText] = useState(JSON.stringify(DEFAULT_INDUSTRY_INPUTS, null, 2));
   const [dueDiligenceInputsText, setDueDiligenceInputsText] = useState("[]");
@@ -100,12 +102,15 @@ export function NewAnalysisPage() {
       return;
     }
 
+    const financialsFromDocument = Boolean(documentId) && useDocumentFinancials;
     const request: DealAnalysisRequest = {
       company_name: companyName,
-      current_financials: currentFinancials,
-      previous_financials: previousFinancials,
       valuation_inputs: valuationInputs,
     };
+    if (!financialsFromDocument) {
+      request.current_financials = currentFinancials;
+      request.previous_financials = previousFinancials;
+    }
 
     if (useRiskInputs) {
       request.risk_inputs = {
@@ -140,8 +145,8 @@ export function NewAnalysisPage() {
 
     setSubmitting(true);
     try {
-      const report = await analyzeDeal(request);
-      navigate("/analysis/result", { state: { report } });
+      const analysis = await startAnalysis(request);
+      navigate(`/analyses/${analysis.id}`);
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -171,18 +176,58 @@ export function NewAnalysisPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">Current period financials</h2>
-            <div className="mt-3">
-              <FinancialStatementFields value={currentFinancials} onChange={setCurrentFinancials} />
-            </div>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Source document</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Pick an uploaded document and the analysis reads its financial statements, industry evidence and risk
+              factors for you. Every figure and red flag in the report is then cited back to a page.
+            </p>
+            <select
+              value={documentId}
+              onChange={(e) => setDocumentId(e.target.value)}
+              className="mt-2 w-full max-w-md rounded-md border border-[var(--border-hairline)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--series-1)]"
+            >
+              <option value="">None - enter everything manually</option>
+              {documents.map((doc) => (
+                <option key={doc.document_id} value={doc.document_id}>
+                  {doc.file_name}
+                </option>
+              ))}
+            </select>
+            {documentId && (
+              <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={useDocumentFinancials}
+                  onChange={(e) => setUseDocumentFinancials(e.target.checked)}
+                />
+                Use the financial statements extracted from this document
+              </label>
+            )}
+            {documentId && useDocumentFinancials && (
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                If a line could not be read from the document, the run stops and names the missing fields. Untick
+                this box to type the statements in instead.
+              </p>
+            )}
           </section>
 
-          <section>
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">Previous period financials</h2>
-            <div className="mt-3">
-              <FinancialStatementFields value={previousFinancials} onChange={setPreviousFinancials} />
-            </div>
-          </section>
+          {!(documentId && useDocumentFinancials) && (
+            <>
+              <section>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">Current period financials</h2>
+                <div className="mt-3">
+                  <FinancialStatementFields value={currentFinancials} onChange={setCurrentFinancials} />
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">Previous period financials</h2>
+                <div className="mt-3">
+                  <FinancialStatementFields value={previousFinancials} onChange={setPreviousFinancials} />
+                </div>
+              </section>
+            </>
+          )}
 
           <section>
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Risk inputs (optional)</h2>
@@ -228,21 +273,6 @@ export function NewAnalysisPage() {
 
           <section>
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Industry &amp; due diligence evidence</h2>
-            <label className="mt-2 block text-sm font-medium text-[var(--text-secondary)]">
-              Derive from a previously uploaded document (optional)
-            </label>
-            <select
-              value={documentId}
-              onChange={(e) => setDocumentId(e.target.value)}
-              className="mt-1 w-full max-w-md rounded-md border border-[var(--border-hairline)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--series-1)]"
-            >
-              <option value="">None - enter evidence manually below</option>
-              {documents.map((doc) => (
-                <option key={doc.document_id} value={doc.document_id}>
-                  {doc.file_name}
-                </option>
-              ))}
-            </select>
 
             {documentId ? (
               <div className="mt-3">
@@ -255,8 +285,8 @@ export function NewAnalysisPage() {
                   className="mt-1 w-full max-w-sm rounded-md border border-[var(--border-hairline)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--series-1)]"
                 />
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
-                  Industry evidence and due-diligence red-flag candidates will be derived automatically from this
-                  document's extracted content.
+                  Industry evidence and due-diligence red-flag candidates are taken from the source document selected
+                  above.
                 </p>
               </div>
             ) : (
@@ -305,7 +335,7 @@ export function NewAnalysisPage() {
             disabled={submitting}
             className="rounded-md bg-[var(--series-1)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
-            {submitting ? "Running analysis... this can take a moment" : "Run deal analysis"}
+            {submitting ? "Starting analysis..." : "Run deal analysis"}
           </button>
         </form>
       </div>

@@ -30,6 +30,10 @@ services:
     volumes:
       - pe_analyst_uploads:/app/data/uploads
       - pe_analyst_processed:/app/data/processed
+      # Reviewed LLM output (the fine-tuning dataset) and the market-data cache, which protects
+      # the vendor's small daily quota. Both would otherwise vanish on every rebuild.
+      - pe_analyst_llm_logs:/app/data/llm_logs
+      - pe_analyst_market_cache:/app/data/market_cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,3 +56,5 @@ volumes:
   pe_analyst_postgres_data:
   pe_analyst_uploads:
   pe_analyst_processed:
+  pe_analyst_llm_logs:
+  pe_analyst_market_cache:

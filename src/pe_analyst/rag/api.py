@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 from pe_analyst.auth.dependencies import get_current_user
 from pe_analyst.auth.models import UserPublic
 from pe_analyst.core.config import Settings, get_settings
+from pe_analyst.db.session import get_db_session
+from pe_analyst.document_intelligence.repository import DocumentRepository
 from pe_analyst.llm.factory import build_llm_service
 
 from .answering import RAGService, build_rag_service
@@ -22,14 +25,26 @@ def get_rag_service(settings: Settings = Depends(get_settings)) -> RAGService:  
 @router.post(
     "/query",
     response_model=RAGAnswerSchema,
-    summary="Ask a question grounded in previously ingested deal documents",
+    summary="Ask a question grounded in the caller's own ingested deal documents",
 )
 def query(
     request: RAGQueryRequest,
     rag_service: RAGService = Depends(get_rag_service),  # noqa: B008
+    session: Session = Depends(get_db_session),  # noqa: B008
     current_user: UserPublic = Depends(get_current_user),  # noqa: B008
 ) -> RAGAnswerSchema:
-    result = rag_service.answer(request.question, document_id=request.document_id)
+    documents = DocumentRepository(session)
+    if request.document_id is not None:
+        if not documents.can_read(request.document_id, current_user):
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"No document found with id {request.document_id}"
+            )
+        result = rag_service.answer(request.question, document_id=request.document_id)
+    else:
+        # No document named: search everything the caller may read, and nothing else.
+        result = rag_service.answer(
+            request.question, document_ids=documents.visible_ids(current_user)
+        )
     return RAGAnswerSchema.from_result(result)
 
 

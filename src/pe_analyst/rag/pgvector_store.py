@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -34,12 +36,21 @@ class PgVectorStore(VectorStore):
             session.commit()
 
     def query(
-        self, vector: list[float], top_k: int, *, document_id: str | None = None
+        self,
+        vector: list[float],
+        top_k: int,
+        *,
+        document_id: str | None = None,
+        document_ids: Sequence[str] | None = None,
     ) -> list[RetrievedChunk]:
+        if document_ids is not None and not document_ids:
+            return []
         distance = VectorChunkModel.embedding.cosine_distance(vector)
         statement = select(VectorChunkModel, distance.label("distance")).order_by(distance)
         if document_id is not None:
             statement = statement.where(VectorChunkModel.document_id == document_id)
+        if document_ids is not None:
+            statement = statement.where(VectorChunkModel.document_id.in_(list(document_ids)))
         statement = statement.limit(top_k)
 
         with Session(self._engine) as session:

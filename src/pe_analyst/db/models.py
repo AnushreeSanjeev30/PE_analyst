@@ -1,4 +1,4 @@
-"""ORM models for users, the audit log, and RAG vector chunks."""
+"""ORM models for users, the audit log, documents, deal analyses, and RAG vector chunks."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, Index, Integer, String
+from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pe_analyst.core.config import get_settings
@@ -50,6 +50,36 @@ class AuditLogModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class DocumentModel(Base):
+    """Who uploaded a document. The extracted report itself is stored as JSON on disk."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    file_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class DealAnalysisModel(Base):
+    """One underwriting run: its inputs, its status, and the full report once finished."""
+
+    __tablename__ = "deal_analyses"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    document_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    recommendation: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    request: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    report: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class VectorChunkModel(Base):
     __tablename__ = "vector_chunks"
     __table_args__ = (Index("ix_vector_chunks_document_id", "document_id"),)
@@ -61,4 +91,11 @@ class VectorChunkModel(Base):
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSION), nullable=False)
 
 
-__all__ = ["EMBEDDING_DIMENSION", "AuditLogModel", "UserModel", "VectorChunkModel"]
+__all__ = [
+    "EMBEDDING_DIMENSION",
+    "AuditLogModel",
+    "DealAnalysisModel",
+    "DocumentModel",
+    "UserModel",
+    "VectorChunkModel",
+]

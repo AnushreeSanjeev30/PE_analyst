@@ -6,14 +6,17 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
 
 from pe_analyst.auth.dependencies import get_current_user
 from pe_analyst.auth.models import UserPublic
 from pe_analyst.core.config import Settings, get_settings
 from pe_analyst.core.logging import get_logger
+from pe_analyst.db.session import get_db_session
 from pe_analyst.rag.retrieval import build_retrieval_service
 
 from .extractor import PDFExtractionError
+from .repository import DocumentRepository, load_visible_report
 from .schemas import DocumentIntelligenceReport, DocumentSummary
 from .service import DocumentIntelligenceService
 from .storage import DocumentReportStore
@@ -31,6 +34,7 @@ logger = get_logger(__name__)
 async def upload_document(
     file: UploadFile,
     settings: Settings = Depends(get_settings),  # noqa: B008
+    session: Session = Depends(get_db_session),  # noqa: B008
     current_user: UserPublic = Depends(get_current_user),  # noqa: B008
 ) -> DocumentIntelligenceReport:
     """Persist an uploaded PDF and return its validated document-intelligence report."""
@@ -67,6 +71,7 @@ async def upload_document(
     logger.info("Processed document %s (%d pages)", result.file_name, result.page_count)
     report = DocumentIntelligenceReport.from_result(result)
     DocumentReportStore.save(report, settings)
+    DocumentRepository(session).record(report, current_user.id)
 
     try:
         chunk_count = build_retrieval_service(settings).ingest_document(
@@ -82,15 +87,18 @@ async def upload_document(
 @router.get(
     "",
     response_model=list[DocumentSummary],
-    summary="List previously processed documents, most recently uploaded first",
+    summary="List the caller's processed documents, most recently uploaded first",
 )
 async def list_documents(
     settings: Settings = Depends(get_settings),  # noqa: B008
+    session: Session = Depends(get_db_session),  # noqa: B008
     current_user: UserPublic = Depends(get_current_user),  # noqa: B008
 ) -> list[DocumentSummary]:
-    return [
-        DocumentSummary.from_report(report) for report in DocumentReportStore.list_all(settings)
-    ]
+    reports = (
+        DocumentReportStore.load(document_id, settings)
+        for document_id in DocumentRepository(session).visible_ids(current_user)
+    )
+    return [DocumentSummary.from_report(report) for report in reports if report is not None]
 
 
 @router.get(
@@ -101,9 +109,10 @@ async def list_documents(
 async def get_document(
     document_id: str,
     settings: Settings = Depends(get_settings),  # noqa: B008
+    session: Session = Depends(get_db_session),  # noqa: B008
     current_user: UserPublic = Depends(get_current_user),  # noqa: B008
 ) -> DocumentIntelligenceReport:
-    report = DocumentReportStore.load(document_id, settings)
+    report = load_visible_report(document_id, current_user, session, settings)
     if report is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No document found with id {document_id}")
     return report

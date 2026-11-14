@@ -50,6 +50,15 @@ def test_openai_provider_requires_a_key() -> None:
 
 
 def test_llm_service_factory_only_enables_configured_providers() -> None:
-    service = build_llm_service(Settings(openai_api_key=None), include_ollama=False)
+    # Every key is cleared explicitly: Settings() also reads the developer's .env, which
+    # normally holds a real GROQ_API_KEY.
+    settings = Settings(
+        openai_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+        anthropic_api_key=None,
+        gemini_api_key=None,
+    )
+    service = build_llm_service(settings, include_ollama=False)
 
     assert service.providers == {}

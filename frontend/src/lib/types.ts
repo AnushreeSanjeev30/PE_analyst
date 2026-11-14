@@ -140,8 +140,9 @@ export interface FinancialStatementInput {
 
 export interface DealAnalysisRequest {
   company_name: string;
-  current_financials: FinancialStatementInput;
-  previous_financials: FinancialStatementInput;
+  // Omit both to have the backend read them from the document named by document_id.
+  current_financials?: FinancialStatementInput | null;
+  previous_financials?: FinancialStatementInput | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   valuation_inputs: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -462,6 +463,30 @@ export interface DissentingView {
   rationale: string;
 }
 
+export type DriverDirection = "Supports" | "Against";
+
+/** One factor behind the ruling, what it rests on, and the document passages that back it. */
+export interface DecisionDriver {
+  area: string;
+  direction: DriverDirection;
+  weight: number | null;
+  statement: string;
+  basis: string;
+  basis_detail: string;
+  evidence: SourceCitation[];
+}
+
+export interface DecisionExplanation {
+  recommendation: string;
+  headline: string;
+  deciding_rule: string;
+  support_weight: number;
+  drivers: DecisionDriver[];
+  conditions: string[];
+  what_would_change: string[];
+  evidence_gaps: string[];
+}
+
 export interface ICDecision {
   company_name: string;
   final_recommendation: string;
@@ -472,6 +497,7 @@ export interface ICDecision {
   risk_officer: RiskOfficerOpinion;
   operating_partner: OperatingPartnerOpinion;
   dissent: DissentingView[];
+  explanation: DecisionExplanation | null;
 }
 
 export interface ScenarioCase {
@@ -550,6 +576,25 @@ export interface UnifiedDealReport {
 // ---------------------------------------------------------------------------
 // Sensitivity grid
 // ---------------------------------------------------------------------------
+
+export type AnalysisStatus = "pending" | "running" | "completed" | "failed";
+
+/** A saved analysis as shown in the history list. */
+export interface DealAnalysisSummary {
+  id: string;
+  company_name: string;
+  status: AnalysisStatus;
+  recommendation: string | null;
+  document_id: string | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+/** A saved analysis with its report, which is null until the run finishes. */
+export interface DealAnalysisRecord extends DealAnalysisSummary {
+  report: UnifiedDealReport | null;
+}
 
 export interface SensitivityCell {
   exit_multiple: number;

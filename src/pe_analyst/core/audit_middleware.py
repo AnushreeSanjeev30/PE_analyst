@@ -34,6 +34,8 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
     def _record(self, request: Request, response: Response) -> None:
         settings = get_settings()
+        if not settings.audit_log_enabled:
+            return
         try:
             engine = get_engine(settings)
             with Session(engine) as session:

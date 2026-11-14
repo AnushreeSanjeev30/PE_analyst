@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
+import { AnalysesPage } from "./pages/AnalysesPage";
 import { DealReportPage } from "./pages/DealReportPage";
 import { DocumentDetailPage } from "./pages/DocumentDetailPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
@@ -40,13 +41,22 @@ function App() {
           }
         />
         <Route
-          path="/analysis/result"
+          path="/analyses"
+          element={
+            <ProtectedRoute>
+              <AnalysesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analyses/:analysisId"
           element={
             <ProtectedRoute>
               <DealReportPage />
             </ProtectedRoute>
           }
         />
+        <Route path="/analysis/result" element={<Navigate to="/analyses" replace />} />
         <Route
           path="/sensitivity"
           element={

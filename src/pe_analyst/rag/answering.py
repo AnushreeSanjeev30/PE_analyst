@@ -8,6 +8,8 @@ degrades to returning the excerpts directly rather than failing or guessing.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from pe_analyst.core.config import Settings
 from pe_analyst.llm.factory import select_provider
 from pe_analyst.llm.models import LLMMessage, LLMProviderName, LLMRequest
@@ -37,9 +39,22 @@ class RAGService:
         self.provider = provider
         self.model = model
 
-    def answer(self, question: str, *, document_id: str | None = None) -> RAGAnswer:
+    def answer(
+        self,
+        question: str,
+        *,
+        document_id: str | None = None,
+        document_ids: Sequence[str] | None = None,
+    ) -> RAGAnswer:
+        """Answer from retrieved evidence; ``document_ids`` limits the search to that set."""
+
         try:
-            retrieved = self.retrieval.retrieve(question, document_id=document_id)
+            if document_ids is None:
+                retrieved = self.retrieval.retrieve(question, document_id=document_id)
+            else:
+                retrieved = self.retrieval.retrieve(
+                    question, document_id=document_id, document_ids=document_ids
+                )
         except Exception as error:  # noqa: BLE001 - a broken embedding/store call must not 500
             return RAGAnswer(
                 answer="Retrieval is currently unavailable; no answer could be produced.",

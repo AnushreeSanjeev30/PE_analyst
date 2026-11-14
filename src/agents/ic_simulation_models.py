@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from .industry_models import SourceCitation
 from .investment_models import InvestmentCommitteeReport
 
 
@@ -63,6 +64,39 @@ class DissentingView:
     rationale: str
 
 
+class DriverDirection(StrEnum):
+    SUPPORTS = "Supports"
+    AGAINST = "Against"
+
+
+@dataclass(slots=True)
+class DecisionDriver:
+    """One factor behind the ruling, with what it rests on and the passages that back it."""
+
+    area: str
+    direction: DriverDirection
+    weight: float | None
+    statement: str
+    # "Document evidence" | "Calculated" | "Analyst input" -- see agents.decision_explanation.
+    basis: str
+    basis_detail: str
+    evidence: list[SourceCitation] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class DecisionExplanation:
+    """Why the committee ruled the way it did, traceable to the source document."""
+
+    recommendation: str
+    headline: str
+    deciding_rule: str
+    support_weight: float
+    drivers: list[DecisionDriver] = field(default_factory=list)
+    conditions: list[str] = field(default_factory=list)
+    what_would_change: list[str] = field(default_factory=list)
+    evidence_gaps: list[str] = field(default_factory=list)
+
+
 @dataclass(slots=True)
 class ICDecision:
     company_name: str
@@ -74,3 +108,4 @@ class ICDecision:
     risk_officer: RiskOfficerOpinion
     operating_partner: OperatingPartnerOpinion
     dissent: list[DissentingView] = field(default_factory=list)
+    explanation: DecisionExplanation | None = None

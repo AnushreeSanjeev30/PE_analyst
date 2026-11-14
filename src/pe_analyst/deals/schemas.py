@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FinancialStatementInput(BaseModel):
@@ -78,4 +79,32 @@ class SensitivityRequest(BaseModel):
     ebitda_multipliers: list[float] = Field(min_length=1)
 
 
-__all__ = ["DealAnalysisRequest", "FinancialStatementInput", "SensitivityRequest"]
+class DealAnalysisSummary(BaseModel):
+    """A saved analysis without its report -- what the history list shows."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    company_name: str
+    # pending | running | completed | failed
+    status: str
+    recommendation: str | None = None
+    document_id: str | None = None
+    error: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class DealAnalysisRecord(DealAnalysisSummary):
+    """A saved analysis with its full report (``None`` until the run finishes)."""
+
+    report: dict[str, Any] | None = None
+
+
+__all__ = [
+    "DealAnalysisRecord",
+    "DealAnalysisRequest",
+    "DealAnalysisSummary",
+    "FinancialStatementInput",
+    "SensitivityRequest",
+]

@@ -1,10 +1,28 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { DecisionExplanationCard } from "../components/DecisionExplanationCard";
 import { Layout } from "../components/Layout";
 import { PipelineTrace } from "../components/PipelineTrace";
 import { ScenarioIrrChart, ScenarioMoicChart } from "../components/ScenarioChart";
 import { SeverityBadge } from "../components/SeverityBadge";
-import { useState } from "react";
-import type { InvestmentMemo, Narrative, ScenarioReport, UnifiedDealReport } from "../lib/types";
+import { useEffect, useState } from "react";
+import { extractErrorMessage, getAnalysis } from "../lib/api";
+import type { DealAnalysisRecord, InvestmentMemo, Narrative, ScenarioReport } from "../lib/types";
+
+const POLL_INTERVAL_MS = 2000;
+
+function StatusPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Layout>
+      <div className="max-w-2xl rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-1)] p-6">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h1>
+        <div className="mt-2 text-sm text-[var(--text-secondary)]">{children}</div>
+        <Link to="/analyses" className="mt-4 inline-block text-sm font-medium text-[var(--series-1)]">
+          &larr; All analyses
+        </Link>
+      </div>
+    </Layout>
+  );
+}
 
 function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
@@ -133,23 +151,59 @@ function MemoCard({ memo }: { memo: InvestmentMemo }) {
 }
 
 export function DealReportPage() {
-  const location = useLocation();
-  const report = (location.state as { report?: UnifiedDealReport } | null)?.report;
+  const { analysisId } = useParams<{ analysisId: string }>();
+  const [record, setRecord] = useState<DealAnalysisRecord | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Load the saved analysis, and keep polling while it is still running in the background.
+  useEffect(() => {
+    if (!analysisId) return;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function load() {
+      try {
+        const next = await getAnalysis(analysisId as string);
+        if (cancelled) return;
+        setRecord(next);
+        setLoadError(null);
+        if (next.status === "pending" || next.status === "running") {
+          timer = window.setTimeout(load, POLL_INTERVAL_MS);
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(extractErrorMessage(err));
+      }
+    }
+
+    setRecord(null);
+    load();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [analysisId]);
+
+  if (loadError) {
+    return <StatusPanel title="Could not load this analysis">{loadError}</StatusPanel>;
+  }
+  if (!record) {
+    return <StatusPanel title="Loading analysis...">Fetching the saved report.</StatusPanel>;
+  }
+  if (record.status === "pending" || record.status === "running") {
+    return (
+      <StatusPanel title={`Analysing ${record.company_name}...`}>
+        The agents are working through financials, valuation, scenarios, risk, due diligence, industry and the
+        investment committee. This page updates on its own; you can leave and come back to it from Analyses.
+      </StatusPanel>
+    );
+  }
+
+  const report = record.report;
   if (!report) {
     return (
-      <Layout>
-        <div className="max-w-2xl rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-1)] p-6">
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">No report loaded</h1>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            Deal reports are held in memory for this session only (the backend doesn't persist runs). Run a new
-            analysis to see a report here.
-          </p>
-          <Link to="/analysis/new" className="mt-4 inline-block text-sm font-medium text-[var(--series-1)]">
-            Start a new analysis &rarr;
-          </Link>
-        </div>
-      </Layout>
+      <StatusPanel title={`Analysis of ${record.company_name} failed`}>
+        {record.error ?? "The run did not produce a report."}
+      </StatusPanel>
     );
   }
 
@@ -195,6 +249,8 @@ export function DealReportPage() {
             {error}
           </div>
         )}
+
+        {ic_decision?.explanation && <DecisionExplanationCard explanation={ic_decision.explanation} />}
 
         <Card title="Pipeline trace">
           <PipelineTrace stages={stages} />
@@ -346,7 +402,11 @@ export function DealReportPage() {
                         <td className="px-3 py-2 align-top text-[var(--text-secondary)]">{f.category}</td>
                         <td className="px-3 py-2 align-top"><SeverityBadge level={f.severity} /></td>
                         <td className="px-3 py-2 align-top text-xs text-[var(--text-muted)]">
-                          p.{f.citation.page_number} &middot; {(f.citation.confidence * 100).toFixed(0)}%
+                          <div className="tabular-nums">
+                            {f.citation.source}, p.{f.citation.page_number} &middot;{" "}
+                            {(f.citation.confidence * 100).toFixed(0)}%
+                          </div>
+                          <div className="mt-1 italic">&ldquo;{f.citation.excerpt}&rdquo;</div>
                         </td>
                       </tr>
                     ))}

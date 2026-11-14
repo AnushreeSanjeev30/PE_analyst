@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base_agent import BaseAgent
+from .decision_explanation import build_decision_explanation
 from .ic_simulation_models import ICDecision
 from .ic_simulation_tools import ChairpersonTools
 from .state import AgentState
@@ -40,6 +41,14 @@ class ICChairpersonAgent(BaseAgent):
             risk_officer=risk_officer,
             operating_partner=operating_partner,
             dissent=dissent,
+            explanation=build_decision_explanation(
+                state.metadata,
+                committee_report,
+                deal_partner,
+                risk_officer,
+                operating_partner,
+                final,
+            ),
         )
         state.recommendation = {"decision": decision, "recommendation": final}
         state.metadata["ic_decision"] = decision
