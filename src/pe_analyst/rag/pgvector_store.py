@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -54,7 +55,10 @@ class PgVectorStore(VectorStore):
         statement = statement.limit(top_k)
 
         with Session(self._engine) as session:
-            rows = session.execute(statement).all()
+            rows = cast(
+                list[tuple[VectorChunkModel, float]],
+                session.execute(statement).all(),
+            )
 
         return [
             RetrievedChunk(
