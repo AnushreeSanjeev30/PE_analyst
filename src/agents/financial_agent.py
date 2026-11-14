@@ -55,6 +55,7 @@ class FinancialAgent(BaseAgent):
         report = self.generate_report(
             state.company_name,
             analysis,
+            financials.get("current") if isinstance(financials, dict) else None,
         )
 
         state.ratios = analysis["ratios"]
@@ -82,7 +83,14 @@ class FinancialAgent(BaseAgent):
         self,
         company: str,
         analysis: dict[str, Any],
+        current: Any | None = None,
     ) -> FinancialReport:
+        """Rate financial health from the ratios, checking for distress first.
+
+        ``current`` is the current-period statement. It is needed because return on equity
+        alone is misleading for a troubled company: a net loss divided by negative equity is a
+        *positive* ROE, which used to rate an insolvent business "Excellent".
+        """
 
         ratios = analysis["ratios"]
 
@@ -93,9 +101,21 @@ class FinancialAgent(BaseAgent):
             0,
         )
 
+        distress = self._distress_signals(current)
+        negative_equity = current is not None and current.shareholders_equity <= 0
+        loss_making = current is not None and current.net_income < 0
+
         ############################################################
 
-        if roe > 0.20:
+        if distress:
+
+            health = FinancialHealth.DISTRESSED
+
+        elif loss_making:
+
+            health = FinancialHealth.WEAK
+
+        elif roe > 0.20:
 
             health = FinancialHealth.EXCELLENT
 
@@ -113,6 +133,13 @@ class FinancialAgent(BaseAgent):
 
         ############################################################
 
+        if distress:
+            basis = " ".join(distress)
+        elif loss_making:
+            basis = "The company made a net loss in the current period."
+        else:
+            basis = f"Return on equity is {roe:.1%} and the current ratio is {current_ratio:.2f}."
+
         summary = FinancialSummary(
 
             company_name=company,
@@ -126,8 +153,7 @@ class FinancialAgent(BaseAgent):
             executive_summary=(
                 f"{company} demonstrates "
                 f"{health.value.lower()} "
-                "financial health based on "
-                "profitability and liquidity."
+                f"financial health. {basis}"
             ),
         )
 
@@ -173,53 +199,139 @@ class FinancialAgent(BaseAgent):
             )
         ]
 
+        if negative_equity:
+
+            findings.append(
+
+                FinancialFinding(
+
+                    title="ROE is not meaningful",
+
+                    description=(
+                        "Shareholders' equity is zero or negative, so return on equity "
+                        "cannot be read as a measure of profitability and was not used "
+                        "to rate financial health."
+                    ),
+
+                    severity="WARNING",
+                )
+            )
+
         ############################################################
 
         strengths = []
 
         weaknesses = []
 
-        if roe > 0.20:
-
-            strengths.append(
-
-                FinancialStrength(
-
-                    title="Strong Profitability",
-
-                    explanation=(
-                        "ROE exceeds industry "
-                        "benchmark."
-                    ),
-                )
-            )
-
-        else:
+        if negative_equity:
 
             weaknesses.append(
 
                 FinancialWeakness(
 
-                    title="Low Profitability",
+                    title="Negative shareholders' equity",
 
                     explanation=(
-                        "ROE below preferred "
-                        "benchmark."
+                        "Liabilities exceed assets; accumulated losses have wiped out "
+                        "the equity base."
                     ),
                 )
             )
 
+        if loss_making:
+
+            weaknesses.append(
+
+                FinancialWeakness(
+
+                    title="Net loss",
+
+                    explanation=(
+                        "The company lost money in the current period."
+                    ),
+                )
+            )
+
+        if current is not None and current.ebit < current.interest_expense:
+
+            weaknesses.append(
+
+                FinancialWeakness(
+
+                    title="Operating profit does not cover interest",
+
+                    explanation=(
+                        "EBIT is below interest expense, so debt is being serviced "
+                        "from cash reserves or new borrowing."
+                    ),
+                )
+            )
+
+        if not negative_equity and not loss_making:
+
+            if roe > 0.20:
+
+                strengths.append(
+
+                    FinancialStrength(
+
+                        title="Strong Profitability",
+
+                        explanation=(
+                            "ROE exceeds industry "
+                            "benchmark."
+                        ),
+                    )
+                )
+
+            else:
+
+                weaknesses.append(
+
+                    FinancialWeakness(
+
+                        title="Low Profitability",
+
+                        explanation=(
+                            "ROE below preferred "
+                            "benchmark."
+                        ),
+                    )
+                )
+
         ############################################################
 
-        recommendation = FinancialRecommendation(
+        if health in {FinancialHealth.EXCELLENT, FinancialHealth.GOOD}:
 
-            recommendation="Positive",
+            recommendation = FinancialRecommendation(
 
-            reasoning=(
-                "Company demonstrates healthy "
-                "fundamental metrics."
-            ),
-        )
+                recommendation="Positive",
+
+                reasoning=(
+                    "Company demonstrates healthy "
+                    "fundamental metrics."
+                ),
+            )
+
+        elif health == FinancialHealth.AVERAGE:
+
+            recommendation = FinancialRecommendation(
+
+                recommendation="Neutral",
+
+                reasoning=(
+                    "Profitability is adequate but below the preferred benchmark."
+                ),
+            )
+
+        else:
+
+            recommendation = FinancialRecommendation(
+
+                recommendation="Negative",
+
+                reasoning=basis,
+            )
 
         ############################################################
 
@@ -237,3 +349,23 @@ class FinancialAgent(BaseAgent):
 
             recommendation=recommendation,
         )
+
+    @staticmethod
+    def _distress_signals(current: Any | None) -> list[str]:
+        """Reasons the company counts as financially distressed; empty when it does not.
+
+        Either signal is enough: equity at or below zero (technically insolvent on the balance
+        sheet), or a net loss while operating profit fails to cover interest (losing money and
+        unable to service its debt from operations).
+        """
+
+        if current is None:
+            return []
+        signals: list[str] = []
+        if current.shareholders_equity <= 0:
+            signals.append("Shareholders' equity is zero or negative.")
+        if current.net_income < 0 and current.ebit < current.interest_expense:
+            signals.append(
+                "The company made a net loss and operating profit does not cover interest."
+            )
+        return signals
