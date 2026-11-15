@@ -78,9 +78,15 @@ class FinancialAnalysisEngine:
                 current.net_income,
                 current.total_assets,
             ),
-            roe=return_on_equity(
-                current.net_income,
-                current.shareholders_equity,
+            # Zero equity makes ROE undefined. Report 0.0 rather than failing the whole
+            # analysis; the Financial Agent rates such a company Distressed on its own check.
+            roe=(
+                return_on_equity(
+                    current.net_income,
+                    current.shareholders_equity,
+                )
+                if current.shareholders_equity != 0
+                else 0.0
             ),
             debt_to_ebitda=debt_to_ebitda(
                 current.total_debt,
