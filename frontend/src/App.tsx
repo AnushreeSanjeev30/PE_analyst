@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import { AnalysesPage } from "./pages/AnalysesPage";
+import { ComparePage } from "./pages/ComparePage";
+import { DealDetailPage } from "./pages/DealDetailPage";
+import { DealsPage } from "./pages/DealsPage";
 import { DealReportPage } from "./pages/DealReportPage";
 import { DocumentDetailPage } from "./pages/DocumentDetailPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
@@ -45,6 +48,30 @@ function App() {
           element={
             <ProtectedRoute>
               <AnalysesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/deals"
+          element={
+            <ProtectedRoute>
+              <DealsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/deals/:dealId"
+          element={
+            <ProtectedRoute>
+              <DealDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analyses/compare"
+          element={
+            <ProtectedRoute>
+              <ComparePage />
             </ProtectedRoute>
           }
         />

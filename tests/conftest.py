@@ -22,7 +22,14 @@ from pe_analyst.db.base import Base  # noqa: E402
 from pe_analyst.db.session import get_db_session, get_session_factory  # noqa: E402
 
 # Every table except ``vector_chunks``, whose pgvector column type SQLite cannot create.
-_SQLITE_TABLES = ("users", "audit_log", "documents", "deal_analyses")
+_SQLITE_TABLES = (
+    "users",
+    "audit_log",
+    "deal_rooms",
+    "deal_room_members",
+    "documents",
+    "deal_analyses",
+)
 
 
 def _sqlite_engine() -> Engine:

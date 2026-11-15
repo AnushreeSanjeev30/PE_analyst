@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { deleteAnalysis, extractErrorMessage, listAnalyses } from "../lib/api";
@@ -20,6 +20,15 @@ function formatDate(value: string): string {
 export function AnalysesPage() {
   const [analyses, setAnalyses] = useState<DealAnalysisSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Up to two runs ticked for comparison; the first ticked is the baseline.
+  const [selected, setSelected] = useState<string[]>([]);
+  const navigate = useNavigate();
+
+  function toggleSelected(id: string) {
+    setSelected((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id].slice(-2),
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -67,12 +76,23 @@ export function AnalysesPage() {
               Every analysis you run is saved here with its full report, so you can reopen it without re-running it.
             </p>
           </div>
-          <Link
-            to="/analysis/new"
-            className="shrink-0 rounded-md bg-[var(--series-1)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            New analysis
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={selected.length !== 2}
+              onClick={() => navigate(`/analyses/compare?base=${selected[0]}&other=${selected[1]}`)}
+              title="Tick two completed runs to compare them"
+              className="rounded-md border border-[var(--border-hairline)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-1)] disabled:opacity-40"
+            >
+              Compare selected
+            </button>
+            <Link
+              to="/analysis/new"
+              className="rounded-md bg-[var(--series-1)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              New analysis
+            </Link>
+          </div>
         </div>
 
         <div className="mt-8">
@@ -86,9 +106,9 @@ export function AnalysesPage() {
               <table className="min-w-full divide-y divide-[var(--gridline)]">
                 <thead className="bg-[var(--page-plane)]">
                   <tr>
-                    {["Company", "Recommendation", "Status", "Started", ""].map((heading) => (
+                    {["", "Company", "Recommendation", "Status", "Started", ""].map((heading, index) => (
                       <th
-                        key={heading}
+                        key={index}
                         className="px-4 py-2 text-left text-xs font-semibold text-[var(--text-muted)] uppercase"
                       >
                         {heading}
@@ -99,6 +119,15 @@ export function AnalysesPage() {
                 <tbody className="divide-y divide-[var(--gridline)]">
                   {analyses.map((analysis) => (
                     <tr key={analysis.id} className="hover:bg-[var(--page-plane)]">
+                      <td className="py-3 pl-4">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select the ${analysis.company_name} run for comparison`}
+                          disabled={analysis.status !== "completed"}
+                          checked={selected.includes(analysis.id)}
+                          onChange={() => toggleSelected(analysis.id)}
+                        />
+                      </td>
                       <td className="px-4 py-3 text-sm">
                         <Link
                           to={`/analyses/${analysis.id}`}

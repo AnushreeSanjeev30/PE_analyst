@@ -14,6 +14,7 @@ from pe_analyst.core.audit_middleware import AuditLoggingMiddleware
 from pe_analyst.core.config import get_settings
 from pe_analyst.core.logging import configure_logging, get_logger
 from pe_analyst.db.session import get_engine
+from pe_analyst.deal_rooms.api import router as deal_rooms_router
 from pe_analyst.deals.api import router as deals_router
 from pe_analyst.deals.repository import DealAnalysisRepository
 from pe_analyst.document_intelligence.api import router as document_intelligence_router
@@ -61,6 +62,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(document_intelligence_router, prefix="/api/v1")
 app.include_router(rag_router, prefix="/api/v1")
 app.include_router(deals_router, prefix="/api/v1")
+app.include_router(deal_rooms_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

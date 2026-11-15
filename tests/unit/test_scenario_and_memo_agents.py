@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 from tests.unit.test_deal_analysis import (
     _due_diligence_inputs,
@@ -103,3 +105,79 @@ def test_memo_covers_every_section_with_figures_from_the_reports() -> None:
     assert f"{lbo_irr:.1%}" in memo.markdown
     assert memo.markdown.startswith("# Investment Memo: ExampleCo")
     assert "Red flag" in memo.markdown
+
+
+def _distressed_financial_data(**overrides: float) -> dict:
+    """A loss-making retailer whose losses have wiped out its equity."""
+
+    data = _financial_data()
+    values = {
+        "net_income": -76.0,
+        "shareholders_equity": -60.0,
+        "ebit": -18.0,
+        "interest_expense": 52.0,
+        **overrides,
+    }
+    data["current"] = replace(data["current"], **values)
+    return data
+
+
+def test_negative_equity_is_distressed_not_excellent() -> None:
+    """Regression: a net loss over negative equity is a positive ROE (-76 / -60 = 127%),
+    which rated an insolvent company Excellent and counted as support for the deal."""
+
+    state = AgentState(company_name="Castell", financial_data=_distressed_financial_data())
+
+    FinancialAgent().run(state)
+
+    report = state.metadata["financial_report"]
+    assert state.ratios["roe"] > 1.0  # the misleading figure is still what the maths gives
+    assert report.summary.health == FinancialHealth.DISTRESSED
+    assert not report.strengths
+    assert {item.title for item in report.weaknesses} == {
+        "Negative shareholders' equity",
+        "Net loss",
+        "Operating profit does not cover interest",
+    }
+    assert report.recommendation.recommendation == "Negative"
+    assert "equity is zero or negative" in report.summary.executive_summary
+    assert any(finding.title == "ROE is not meaningful" for finding in report.findings)
+
+
+def test_zero_equity_is_distressed_instead_of_crashing_the_analysis() -> None:
+    data = _distressed_financial_data(shareholders_equity=0.0)
+    state = AgentState(company_name="Castell", financial_data=data)
+
+    FinancialAgent().run(state)
+
+    assert state.metadata["financial_report"].summary.health == FinancialHealth.DISTRESSED
+
+
+def test_a_net_loss_with_positive_equity_is_weak() -> None:
+    data = _distressed_financial_data(shareholders_equity=400.0, ebit=60.0)
+    state = AgentState(company_name="LossCo", financial_data=data)
+
+    FinancialAgent().run(state)
+
+    report = state.metadata["financial_report"]
+    assert report.summary.health == FinancialHealth.WEAK
+    assert [item.title for item in report.weaknesses] == ["Net loss"]
+
+
+def test_distressed_financials_count_against_the_deal() -> None:
+    report = run_deal_analysis(
+        DealAnalysisInputs(
+            company_name="Castell",
+            financial_data=_distressed_financial_data(),
+            valuation_inputs=_valuation_inputs(),
+            industry_inputs=_industry_inputs(),
+            risk_inputs={"altman_z": 3.2, "piotroski_score": 7, "industry_risk_score": 30},
+            due_diligence_inputs=[],
+        )
+    )
+
+    vote = next(
+        item for item in report.ic_decision.committee_vote.votes if item.area == "Financial health"
+    )
+    assert vote.outcome == "CONCERN"
+    assert report.final_recommendation != "BUY"

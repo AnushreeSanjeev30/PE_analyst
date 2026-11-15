@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Layout } from "../components/Layout";
+import { PdfPageLink } from "../components/PdfPageLink";
 import { ProvenanceTag } from "../components/ProvenanceTag";
 import { extractErrorMessage, getDocument, queryRag } from "../lib/api";
 import type { DocumentIntelligenceReport, RAGAnswer } from "../lib/types";
@@ -24,6 +25,9 @@ export function DocumentDetailPage() {
       .then(setReport)
       .catch((err) => setError(extractErrorMessage(err)));
   }, [documentId]);
+
+  // Uploads are stored as "<uuid>_<name>"; show the name the user gave the file.
+  const title = (report?.file_name ?? "Document").replace(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}_/, "");
 
   async function handleAsk(event: FormEvent) {
     event.preventDefault();
@@ -52,7 +56,12 @@ export function DocumentDetailPage() {
 
         {report && (
           <>
-            <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{report.file_name}</h1>
+            <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+              <h1 className="text-2xl font-semibold text-[var(--text-primary)]">{title}</h1>
+              <PdfPageLink documentId={documentId} page={1} title={title} className="text-sm font-medium">
+                Open the PDF
+              </PdfPageLink>
+            </div>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
               {report.page_count} pages &middot; {report.risk_factors.length} risk factors &middot;{" "}
               {report.notes.length} notes &middot; {report.industry_evidence.length} industry evidence items
@@ -98,7 +107,7 @@ export function DocumentDetailPage() {
                   {answer.citations.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {answer.citations.map((c, i) => (
-                        <ProvenanceTag key={i} page={c.page_number} confidence={c.score} excerpt={c.excerpt} />
+                        <ProvenanceTag documentId={documentId} documentTitle={title} key={i} page={c.page_number} confidence={c.score} excerpt={c.excerpt} />
                       ))}
                     </div>
                   )}
@@ -128,7 +137,7 @@ export function DocumentDetailPage() {
                       {section.references.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {section.references.map((ref, j) => (
-                            <ProvenanceTag key={j} page={ref.page_number} confidence={ref.confidence} excerpt={ref.excerpt} />
+                            <ProvenanceTag documentId={documentId} documentTitle={title} key={j} page={ref.page_number} confidence={ref.confidence} excerpt={ref.excerpt} />
                           ))}
                         </div>
                       )}
@@ -148,7 +157,7 @@ export function DocumentDetailPage() {
                       <p className="text-sm font-medium text-[var(--text-primary)]">{rf.title}</p>
                       <p className="mt-1 text-sm text-[var(--text-secondary)]">{rf.text}</p>
                       <div className="mt-2">
-                        <ProvenanceTag page={rf.source.page_number} confidence={rf.source.confidence} excerpt={rf.source.excerpt} />
+                        <ProvenanceTag documentId={documentId} documentTitle={title} page={rf.source.page_number} confidence={rf.source.confidence} excerpt={rf.source.excerpt} />
                       </div>
                     </div>
                   ))}
@@ -166,7 +175,7 @@ export function DocumentDetailPage() {
                       <p className="text-sm font-medium text-[var(--text-primary)]">{note.title}</p>
                       <p className="mt-1 text-sm text-[var(--text-secondary)]">{note.text}</p>
                       <div className="mt-2">
-                        <ProvenanceTag page={note.source.page_number} confidence={note.source.confidence} excerpt={note.source.excerpt} />
+                        <ProvenanceTag documentId={documentId} documentTitle={title} page={note.source.page_number} confidence={note.source.confidence} excerpt={note.source.excerpt} />
                       </div>
                     </div>
                   ))}
@@ -183,7 +192,7 @@ export function DocumentDetailPage() {
                     <div key={i} className="rounded-md border border-[var(--border-hairline)] bg-[var(--surface-1)] p-4">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-[var(--text-primary)] capitalize">{ev.topic}</span>
-                        <ProvenanceTag page={ev.page_number} confidence={ev.confidence} excerpt={ev.excerpt} />
+                        <ProvenanceTag documentId={documentId} documentTitle={title} page={ev.page_number} confidence={ev.confidence} excerpt={ev.excerpt} />
                       </div>
                       <p className="mt-1 text-sm text-[var(--text-secondary)]">{ev.claim}</p>
                       <p className="mt-1 text-xs italic text-[var(--text-muted)]">&ldquo;{ev.excerpt}&rdquo;</p>

@@ -19,6 +19,9 @@ class SourceCitation:
     page_number: int
     excerpt: str
     confidence: float
+    # Id of the uploaded document the excerpt came from, when there is one. Lets the UI open
+    # the PDF at ``page_number``; None for evidence that was typed in by hand.
+    document_id: str | None = None
 
 
 @dataclass(slots=True)

@@ -12,6 +12,8 @@ from pe_analyst.db.base import Base  # noqa: E402
 from pe_analyst.db.models import (  # noqa: E402, F401
     AuditLogModel,
     DealAnalysisModel,
+    DealRoomMemberModel,
+    DealRoomModel,
     DocumentModel,
     UserModel,
     VectorChunkModel,
