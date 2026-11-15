@@ -43,10 +43,24 @@ BOB = UserPublic(id="bob", email="bob@example.com", role="analyst")
 CARA = UserPublic(id="cara", email="cara@example.com", role="analyst")
 
 PEERS = [
-    {"name": "Peer A", "enterprise_value": 1800.0, "market_cap": 1600.0, "revenue": 200.0,
-     "ebitda": 40.0, "net_income": 20.0, "book_value": 200.0},
-    {"name": "Peer B", "enterprise_value": 2000.0, "market_cap": 1750.0, "revenue": 250.0,
-     "ebitda": 50.0, "net_income": 25.0, "book_value": 225.0},
+    {
+        "name": "Peer A",
+        "enterprise_value": 1800.0,
+        "market_cap": 1600.0,
+        "revenue": 200.0,
+        "ebitda": 40.0,
+        "net_income": 20.0,
+        "book_value": 200.0,
+    },
+    {
+        "name": "Peer B",
+        "enterprise_value": 2000.0,
+        "market_cap": 1750.0,
+        "revenue": 250.0,
+        "ebitda": 50.0,
+        "net_income": 25.0,
+        "book_value": 225.0,
+    },
 ]
 
 
@@ -212,9 +226,7 @@ def test_an_existing_private_document_can_be_filed_in_a_deal(client: TestClient)
     room_id = _room(client)
     client.post(f"/api/v1/deal-rooms/{room_id}/members", json={"email": BOB.email})
 
-    moved = client.put(
-        f"/api/v1/documents/{document_id}/deal-room", json={"deal_room_id": room_id}
-    )
+    moved = client.put(f"/api/v1/documents/{document_id}/deal-room", json={"deal_room_id": room_id})
 
     assert moved.status_code == 200
     assert moved.json()["deal_room_id"] == room_id
@@ -302,16 +314,24 @@ def _report(
                 pages=[1],
                 references=[
                     SourceReferenceSchema(
-                        page_number=1, excerpt=f"Statements of Operations (in {units})",
+                        page_number=1,
+                        excerpt=f"Statements of Operations (in {units})",
                         confidence=0.85,
                     )
                 ],
             )
         )
     return DocumentIntelligenceReport(
-        document_id=document_id, file_name=f"{document_id}.pdf", page_count=1,
-        sections=sections, statement_line_items=lines, risk_factors=[], notes=[],
-        management_discussion=[], industry_evidence=[], warnings=[],
+        document_id=document_id,
+        file_name=f"{document_id}.pdf",
+        page_count=1,
+        sections=sections,
+        statement_line_items=lines,
+        risk_factors=[],
+        notes=[],
+        management_discussion=[],
+        industry_evidence=[],
+        warnings=[],
     )
 
 
@@ -397,10 +417,13 @@ def test_conflicting_claims_about_position_are_flagged_not_resolved() -> None:
         update={
             "industry_evidence": [
                 IndustryEvidenceSchema(
-                    topic="competition", source="doc.pdf", page_number=2,
+                    topic="competition",
+                    source="doc.pdf",
+                    page_number=2,
                     excerpt="We are the market leader in our segment. "
                     "Pricing pressure from new entrants reduced our margins.",
-                    claim="", confidence=0.85,
+                    claim="",
+                    confidence=0.85,
                 )
             ]
         }
@@ -414,11 +437,21 @@ def test_conflicting_claims_about_position_are_flagged_not_resolved() -> None:
 
 def _statement(**overrides: float) -> FinancialStatement:
     values = {
-        "revenue": 1000.0, "cost_of_goods_sold": 600.0, "ebitda": 220.0, "ebit": 150.0,
-        "net_income": 100.0, "operating_cash_flow": 140.0, "capital_expenditure": 40.0,
-        "total_assets": 1000.0, "shareholders_equity": 400.0, "total_debt": 200.0,
-        "interest_expense": 20.0, "current_assets": 200.0, "inventory": 50.0,
-        "current_liabilities": 180.0, **overrides,
+        "revenue": 1000.0,
+        "cost_of_goods_sold": 600.0,
+        "ebitda": 220.0,
+        "ebit": 150.0,
+        "net_income": 100.0,
+        "operating_cash_flow": 140.0,
+        "capital_expenditure": 40.0,
+        "total_assets": 1000.0,
+        "shareholders_equity": 400.0,
+        "total_debt": 200.0,
+        "interest_expense": 20.0,
+        "current_assets": 200.0,
+        "inventory": 50.0,
+        "current_liabilities": 180.0,
+        **overrides,
     }
     return FinancialStatement(**values)
 
@@ -553,3 +586,201 @@ def test_input_diff_reports_nested_and_list_changes() -> None:
         "gone": (True, None),
         "added": (None, 5),
     }
+
+
+# ---------------------------------------------------------------------------
+# Exporting to Word and PDF
+# ---------------------------------------------------------------------------
+
+
+def _docx_text(content: bytes) -> str:
+    import io
+
+    from docx import Document
+
+    document = Document(io.BytesIO(content))
+    text = [paragraph.text for paragraph in document.paragraphs]
+    text += [cell.text for table in document.tables for row in table.rows for cell in row.cells]
+    return "\n".join(text)
+
+
+def _pdf_text(content: bytes) -> str:
+    import io
+
+    from pypdf import PdfReader
+
+    return "\n".join(page.extract_text() for page in PdfReader(io.BytesIO(content)).pages)
+
+
+def test_an_analysis_downloads_as_a_word_memo_with_its_reasons_and_sources(
+    client: TestClient,
+) -> None:
+    document_id = _upload(client, "Harbor_Logistics_2025.pdf")
+    record = _analyse(client, company_name="Harbor Logistics", document_ids=[document_id])
+
+    response = client.get(
+        f"/api/v1/deals/analyses/{record['id']}/export", params={"format": "docx"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert "wordprocessingml" in response.headers["content-type"]
+    assert (
+        'filename="Harbor_Logistics_investment_memo.docx"'
+        in (response.headers["content-disposition"])
+    )
+    text = _docx_text(response.content)
+    assert "Investment Committee Memo: Harbor Logistics" in text
+    assert f"Recommendation: {record['recommendation']}" in text
+    assert "Why this decision" in text
+    # The quoted evidence and where it came from survive into the document.
+    assert "Customer concentration is significant" in text
+    assert "Harbor_Logistics_2025.pdf, page 2" in text
+    assert "Entry multiple (EV / EBITDA)" in text
+    assert "not investment advice" in text
+
+
+def test_an_analysis_downloads_as_a_pdf(client: TestClient) -> None:
+    document_id = _upload(client, "Harbor_Logistics_2025.pdf")
+    record = _analyse(client, company_name="Harbor Logistics", document_ids=[document_id])
+
+    response = client.get(f"/api/v1/deals/analyses/{record['id']}/export")
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    text = _pdf_text(response.content)
+    assert "Investment Committee Memo: Harbor Logistics" in text
+    assert "Why this decision" in text
+    assert "Key figures" in text
+
+
+@pytest.mark.parametrize("file_format", ["pdf", "docx"])
+def test_a_comparison_downloads_in_both_formats(client: TestClient, file_format: str) -> None:
+    document_id = _upload(client, "Meridian_Software_2025.pdf")
+    cheap = _analyse(client, document_ids=[document_id])
+    dear = _analyse(
+        client,
+        document_ids=[document_id],
+        valuation_assumptions=_assumptions(entry_multiple=12.0),
+    )
+
+    response = client.get(
+        "/api/v1/deals/analyses/compare/export",
+        params={"base": cheap["id"], "other": dear["id"], "format": file_format},
+    )
+
+    assert response.status_code == 200, response.text
+    text = (_docx_text if file_format == "docx" else _pdf_text)(response.content)
+    assert "Run Comparison: Meridian Software" in text
+    # Inputs are named in plain words, not as request paths.
+    assert "Entry multiple (EV / EBITDA)" in text
+    assert "valuation_assumptions" not in text
+    assert "7.00x" in text and "12.00x" in text
+    assert "Base-case IRR" in text
+
+
+def test_export_respects_access_and_rejects_unknown_formats(client: TestClient) -> None:
+    document_id = _upload(client, "Meridian_Software_2025.pdf")
+    record = _analyse(client, document_ids=[document_id])
+    url = f"/api/v1/deals/analyses/{record['id']}/export"
+
+    assert client.get(url, params={"format": "xlsx"}).status_code == 422
+    _act_as(BOB)
+    assert client.get(url).status_code == 404
+
+
+def test_pdf_export_survives_symbols_outside_the_built_in_font() -> None:
+    from pe_analyst.deals.export import ExportDocument, Paragraph, render_pdf
+
+    document = ExportDocument("T", "S", [Paragraph("IRR 22% → 11% (− 10.5 pts) ≥ target")])
+
+    assert "IRR 22% -> 11% (- 10.5 pts) >= target" in _pdf_text(render_pdf(document))
+
+
+# ---------------------------------------------------------------------------
+# Filling in what the documents leave out
+# ---------------------------------------------------------------------------
+
+
+def test_figures_are_worked_out_from_related_lines_and_flagged() -> None:
+    report = _report(
+        "doc",
+        [
+            _line("Total revenues", [1000.0, 900.0]),
+            _line("Gross profit", [400.0, 340.0]),
+            _line("Adjusted EBITDA", [220.0, 190.0]),
+            _line("Depreciation and amortization", [70.0, 60.0]),
+            _line("Total assets", [1000.0, 900.0]),
+            _line("Total liabilities", [600.0, 550.0]),
+        ],
+    )
+
+    mapped, _ = map_financials_across([report])
+
+    assert (mapped.current["cost_of_goods_sold"], mapped.previous["cost_of_goods_sold"]) == (
+        600.0,
+        560.0,
+    )
+    assert (mapped.current["ebit"], mapped.previous["ebit"]) == (150.0, 130.0)
+    assert (mapped.current["shareholders_equity"], mapped.previous["shareholders_equity"]) == (
+        400.0,
+        350.0,
+    )
+    for name in ("cost_of_goods_sold", "ebit", "shareholders_equity"):
+        assert name not in mapped.missing
+        assert any(warning.startswith(f"{name} derived") for warning in mapped.warnings)
+
+
+@pytest.mark.parametrize(
+    ("sample", "expected"),
+    [
+        ("Harbor_Logistics_2025.pdf", "Harbor Logistics Group"),
+        ("Meridian_Software_2025.pdf", "Meridian Software Inc"),
+    ],
+)
+def test_the_company_name_is_read_from_the_document_title(sample: str, expected: str) -> None:
+    suggestion = suggest_inputs([_sample_report(sample)]).company_name
+
+    assert suggestion.value == expected
+    assert suggestion.basis == "Document"
+
+
+def test_the_company_name_falls_back_to_a_cleaned_file_name() -> None:
+    report = _report("Acme_Widgets_FY2024_Annual_Report_final", [])
+
+    suggestion = suggest_inputs([report]).company_name
+
+    assert suggestion.value == "Acme Widgets"
+    assert suggestion.basis == "Default"
+
+
+def test_a_comparable_company_added_or_dropped_is_one_readable_row() -> None:
+    from pe_analyst.deals.export import input_label
+
+    base = {
+        "valuation_assumptions": {"peers": [PEERS[0], PEERS[1]]},
+        "risk_inputs": {"altman_z": 3.2},
+    }
+    other = {"valuation_assumptions": {"peers": [PEERS[0]]}}
+
+    changes = {change.path: (change.base, change.other) for change in diff_inputs(base, other)}
+
+    assert changes == {
+        "valuation_assumptions.peers[1]": ("Peer B (included)", "not included"),
+        "risk_inputs.altman_z": (3.2, None),
+    }
+    assert input_label("valuation_assumptions.peers[1]") == "Comparable company 2"
+    assert input_label("valuation_assumptions.entry_multiple") == "Entry multiple (EV / EBITDA)"
+    assert input_label("risk_inputs.altman_z") == "Risk inputs: altman z"
+
+
+def test_long_passages_get_a_title_cut_at_a_word() -> None:
+    title = DocumentIntelligenceService._title(
+        "Our supply chain depends on two component makers, and disruption at either may "
+        "increase our costs."
+    )
+
+    assert title.endswith("...")
+    assert len(title) <= 80
+    assert not title.rstrip(".").endswith(" may i")
+    assert DocumentIntelligenceService._title("Short sentence.") == "Short sentence."

@@ -7,14 +7,24 @@ reports. Every mapped value keeps the page it came from.
 
 Nothing is invented: a field that can't be found is reported in ``missing`` and
 :meth:`MappedFinancials.statements` refuses to build statements until it is supplied through
-``overrides``. The two narrow exceptions are documented derivations (EBITDA = operating income +
-D&A; total debt = sum of its reported components) and inventory, which defaults to zero with a
-warning because many service businesses genuinely carry none.
+``overrides``. The narrow exceptions are accounting identities applied to lines the document
+does report, each recorded as a warning so the reader knows the figure was worked out rather
+than quoted:
+
+* EBITDA = operating income + depreciation and amortization
+* EBIT = EBITDA - depreciation and amortization
+* cost of goods sold = revenue - gross profit
+* shareholders' equity = total assets - total liabilities
+* total debt = the sum of its reported components
+
+and inventory, which defaults to zero with a warning because many service businesses genuinely
+carry none.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 
 from pe_analyst.engines.financial.models import FinancialStatement
@@ -72,6 +82,8 @@ _DEBT_COMPONENTS = (
     "long-term borrowings", "commercial paper",
 )
 _DEPRECIATION = ("depreciation and amortization", "depreciation & amortization", "depreciation")
+_GROSS_PROFIT = ("gross profit", "gross margin")
+_TOTAL_LIABILITIES = ("total liabilities",)
 _EXCLUDE = ("per share", "margin", "basic", "diluted", "%", "weighted")
 _ABSOLUTE_FIELDS = {"capital_expenditure", "interest_expense"}
 
@@ -150,6 +162,31 @@ def _assign(mapped: MappedFinancials, name: str, item: StatementLineItemSchema) 
     mapped.source_labels[name] = item.label
 
 
+def _derive(
+    mapped: MappedFinancials,
+    name: str,
+    base: str,
+    other: StatementLineItemSchema,
+    combine: Callable[[float, float], float],
+    warning: str,
+) -> None:
+    """Fill ``name`` from an already-mapped field and one more reported line.
+
+    Applied per period, so a figure is only derived for a period in which both of its inputs
+    were reported. Nothing happens when the base field itself is missing.
+    """
+
+    if base not in mapped.current:
+        return
+    values = _numbers(other)
+    mapped.current[name] = combine(mapped.current[base], values[0])
+    if base in mapped.previous and len(values) > 1:
+        mapped.previous[name] = combine(mapped.previous[base], values[1])
+    mapped.source_pages[name] = other.source.page_number
+    mapped.source_labels[name] = f"{mapped.source_labels.get(base, base)} and {other.label}"
+    mapped.warnings.append(warning)
+
+
 _UNITS = re.compile(r"in\s+(thousands|millions|billions)", re.IGNORECASE)
 _UNIT_MULTIPLIERS = {"thousands": 1e3, "millions": 1e6, "billions": 1e9}
 _STATEMENT_KINDS = {"income_statement", "balance_sheet", "cash_flow_statement"}
@@ -204,6 +241,29 @@ def map_financial_statements(report: DocumentIntelligenceReport) -> MappedFinanc
             ebit_label = mapped.source_labels["ebit"]
             mapped.source_labels["ebitda"] = f"{ebit_label} + {depreciation.label}"
             mapped.warnings.append("ebitda derived as operating income + depreciation/amortization")
+
+    depreciation = _find(items, _DEPRECIATION)
+    if "ebit" not in mapped.current and "ebitda" in mapped.current and depreciation is not None:
+        _derive(
+            mapped, "ebit", "ebitda", depreciation, lambda base, other: base - abs(other),
+            "ebit derived as EBITDA - depreciation/amortization",
+        )
+
+    gross_profit = _find(items, _GROSS_PROFIT)
+    if "cost_of_goods_sold" not in mapped.current and gross_profit is not None:
+        _derive(
+            mapped, "cost_of_goods_sold", "revenue", gross_profit,
+            lambda base, other: base - other,
+            "cost_of_goods_sold derived as revenue - gross profit",
+        )
+
+    liabilities = _find(items, _TOTAL_LIABILITIES)
+    if "shareholders_equity" not in mapped.current and liabilities is not None:
+        _derive(
+            mapped, "shareholders_equity", "total_assets", liabilities,
+            lambda base, other: base - other,
+            "shareholders_equity derived as total assets - total liabilities",
+        )
 
     if "inventory" not in mapped.current:
         mapped.current["inventory"] = 0.0

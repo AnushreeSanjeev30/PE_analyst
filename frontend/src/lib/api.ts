@@ -219,6 +219,30 @@ export async function suggestInputs(documentIds: string[]): Promise<SuggestedInp
   return data;
 }
 
+export type ExportFormat = "pdf" | "docx";
+
+/**
+ * Downloads a server-built PDF or Word file and saves it under the name the server gives it.
+ * Fetched as a blob because the request needs the auth header a plain link cannot send.
+ */
+export async function downloadExport(
+  path: string,
+  format: ExportFormat,
+  params: Record<string, string> = {},
+): Promise<void> {
+  const response = await client.get<Blob>(path, { params: { ...params, format }, responseType: "blob" });
+  const disposition = String(response.headers["content-disposition"] ?? "");
+  const filename = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `report.${format}`;
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** What changed between two saved runs, in the inputs and in the outcome. */
 export async function compareAnalyses(baseId: string, otherId: string): Promise<AnalysisComparison> {
   const { data } = await client.get<AnalysisComparison>("/deals/analyses/compare", {

@@ -202,7 +202,7 @@ class DocumentIntelligenceService:
                     text = sentence.strip()
                     factors.append(
                         ExtractedRiskFactor(
-                            text[:80], text, self._reference(text, page.page_number)
+                            self._title(text), text, self._reference(text, page.page_number)
                         )
                     )
         return factors
@@ -265,6 +265,16 @@ class DocumentIntelligenceService:
                         }
                     )
         return evidence
+
+    @staticmethod
+    def _title(text: str, limit: int = 80) -> str:
+        """A short heading for a passage: the whole sentence if it fits, otherwise cut at a
+        word boundary and marked with an ellipsis so it never ends mid-word."""
+
+        flat = " ".join(text.split())
+        if len(flat) <= limit:
+            return flat
+        return flat[: limit - 3].rsplit(" ", 1)[0].rstrip(",;:") + "..."
 
     @staticmethod
     def _reference(text: str, page_number: int) -> SourceReference:

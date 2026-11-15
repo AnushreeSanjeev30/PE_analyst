@@ -1,4 +1,4 @@
-"""Write three fictional annual reports to data/samples/ for trying the app.
+"""Write four fictional company documents to data/samples/ for trying the app.
 
     python scripts/make_sample_pdfs.py
 
@@ -10,6 +10,11 @@ on the New Analysis page:
 * Meridian_Software_2025.pdf   -- healthy, no red flags
 * Harbor_Logistics_2025.pdf    -- sound numbers, but customer concentration and litigation
 * Castell_Retail_2025.pdf      -- going-concern doubt, a covenant breach and a restatement
+* Orion_Components_2025.pdf    -- a management summary with gaps. It reports gross profit,
+                                  adjusted EBITDA and total liabilities instead of cost of
+                                  sales, operating income and equity (the app works those out),
+                                  and leaves out interest expense and operating cash flow
+                                  (the app asks for them). Use it to see missing figures handled.
 
 The first two share the headline figures the default valuation inputs assume (revenue 1,000,
 EBITDA 220, debt 200). Castell does not, so edit the valuation inputs if you want its valuation
@@ -184,10 +189,51 @@ def castell() -> bytes:
     return build_pdf([overview, risks, *statements, notes])
 
 
+def orion() -> bytes:
+    overview = Page().text("Orion Components Ltd - 2025 Annual Report", size=14).paragraph([
+        "Orion designs precision sensors for industrial automation customers in Europe.",
+        "Market overview: industry demand for factory sensors grew 9% in 2025.",
+        "We are the market leader in high-temperature sensing, with strong customer retention.",
+        "Management strategy focuses on aftermarket service contracts and a second plant.",
+    ])
+    risks = Page().text("Item 1A. Risk Factors", size=12).paragraph([
+        "A shortage of specialist semiconductors could delay shipments and reduce our revenue.",
+        "Our supply chain depends on two component makers, and disruption at either may",
+        "increase our costs.",
+        "Currency movements may affect the reported value of sales made outside the eurozone.",
+    ])
+    statements = _statements(
+        income=[
+            ["Total revenues", "640", "580"],
+            ["Gross profit", "272", "238"],
+            ["Adjusted EBITDA", "134", "116"],
+            ["Net income", "61", "52"],
+        ],
+        balance=[
+            ["Inventories", "74", "68"],
+            ["Total current assets", "236", "214"],
+            ["Total assets", "610", "560"],
+            ["Total current liabilities", "128", "120"],
+            ["Long-term debt", "150", "165"],
+            ["Total liabilities", "330", "325"],
+        ],
+        cash=[
+            ["Depreciation and amortization", "38", "34"],
+            ["Purchases of property and equipment", "(45)", "(31)"],
+        ],
+    )
+    notes = Page().text("Notes to Consolidated Financial Statements", size=12).paragraph([
+        "Note 1. Revenue is recognized on delivery; service contracts are recognized over time.",
+        "Note 2. The term loan matures in 2029.",
+    ])
+    return build_pdf([overview, risks, *statements, notes])
+
+
 SAMPLES = {
     "Meridian_Software_2025.pdf": meridian,
     "Harbor_Logistics_2025.pdf": harbor,
     "Castell_Retail_2025.pdf": castell,
+    "Orion_Components_2025.pdf": orion,
 }
 
 

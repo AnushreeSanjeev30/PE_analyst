@@ -56,6 +56,8 @@ class DriverChange(BaseModel):
 class InputChange(BaseModel):
     # Dotted path into the request, e.g. "valuation_assumptions.entry_multiple".
     path: str
+    # The same thing in plain words, e.g. "Entry multiple (EV / EBITDA)".
+    label: str = ""
     base: Any
     other: Any
 
@@ -206,6 +208,25 @@ def diff_inputs(base: Any, other: Any, path: str = "") -> list[InputChange]:
             right = other[index] if index < len(other) else None
             changes += diff_inputs(left, right, f"{path}[{index}]")
         return changes
+    # Present on one side only. A named item (a comparable company) is reported as one row
+    # saying it was included or not; anything else is unpacked so each value gets its own row.
+    for present, absent_is_base in ((base, False), (other, True)):
+        missing = other if not absent_is_base else base
+        if missing is None and isinstance(present, dict) and present:
+            name = present.get("name")
+            if isinstance(name, str) and name:
+                included, excluded = f"{name} (included)", "not included"
+                return [
+                    InputChange(
+                        path=path,
+                        base=excluded if absent_is_base else included,
+                        other=included if absent_is_base else excluded,
+                    )
+                ]
+            empty: dict[str, Any] = {}
+            return diff_inputs(empty, present, path) if absent_is_base else diff_inputs(
+                present, empty, path
+            )
     if _differs(base, other):
         return [InputChange(path=path, base=_shorten(base), other=_shorten(other))]
     return []
@@ -249,8 +270,13 @@ def compare_analyses(base: Any, other: Any) -> AnalysisComparison:
 
     base_ref, other_ref = ref(base), ref(other)
     base_report, other_report = base.report or {}, other.report or {}
+    # Imported here because the export module builds on this one.
+    from .export import input_label
+
     drivers = _driver_changes(base_report, other_report)
     inputs = diff_inputs(base.request or {}, other.request or {})
+    for change in inputs:
+        change.label = input_label(change.path)
     return AnalysisComparison(
         base=base_ref,
         other=other_ref,

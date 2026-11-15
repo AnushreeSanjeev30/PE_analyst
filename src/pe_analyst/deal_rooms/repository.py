@@ -133,6 +133,8 @@ class DealRoomRepository:
             ).all()
             for room_id, count in rows:
                 # The owner is not stored as a member row, hence the starting 1.
+                if room_id is None:
+                    continue
                 result[room_id][key] = count + (1 if key == "members" else 0)
         return result
 

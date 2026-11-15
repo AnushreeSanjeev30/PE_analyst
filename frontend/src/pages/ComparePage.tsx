@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { DownloadButtons } from "../components/DownloadButtons";
 import { Layout } from "../components/Layout";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { compareAnalyses, extractErrorMessage } from "../lib/api";
@@ -114,8 +115,18 @@ export function ComparePage() {
     <Layout>
       <div className="max-w-5xl space-y-6 pb-16">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Compare runs</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Compare runs</h1>
+            <DownloadButtons
+              path="/deals/analyses/compare/export"
+              params={{ base, other }}
+              label="Save this comparison as"
+            />
+          </div>
           <p className="mt-2 text-sm text-[var(--text-primary)]">{comparison.summary}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            To save either run's full report, open it below and use its own download buttons.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -147,7 +158,9 @@ export function ComparePage() {
                 <tbody className="divide-y divide-[var(--gridline)]">
                   {comparison.input_changes.map((change) => (
                     <tr key={change.path}>
-                      <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{change.path}</td>
+                      <td className="px-3 py-2 font-medium text-[var(--text-primary)]" title={change.path}>
+                        {change.label || change.path}
+                      </td>
                       <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)]">{formatInput(change.base)}</td>
                       <td className="px-3 py-2 tabular-nums text-[var(--text-primary)]">{formatInput(change.other)}</td>
                     </tr>

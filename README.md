@@ -195,6 +195,21 @@ runs: every input that differs, every headline result that moved (IRR, MOIC, val
 risk), and each scorecard area whose vote flipped. Tick two runs on the Analyses page or inside
 a deal.
 
+**Less typing.** Picking documents reads them straight away. The company name comes from the
+document title. Figures a document does not state outright are worked out from the lines it
+does give (cost of sales from gross profit, operating income from EBITDA, equity from total
+liabilities) and marked as derived. Margins, growth and debt recalculate when a figure is
+edited, the exit multiple follows the entry multiple until it is changed, and a value the
+analyst types is never overwritten. A checklist above the Run button names every input still
+needed, says where in the accounts to find it, and jumps to the box.
+
+**Reports to take away.** `GET /api/v1/deals/analyses/{id}/export?format=pdf|docx` returns the
+analysis as an investment committee memo: the ruling and why, each reason's quoted source, the
+key figures, scenarios, red flags, the memo text and the assumptions used.
+`GET /api/v1/deals/analyses/compare/export` does the same for a comparison of two runs. Both
+are built by `src/pe_analyst/deals/export.py` from the saved run. Word for editing, PDF for
+sending. The buttons are on the report page and the comparison page.
+
 ## Saved analyses and background runs
 
 `POST /api/v1/deals/analyses` starts a run in the background and returns an id;
@@ -215,8 +230,9 @@ no owner and are hidden; upload them again.
 
 ## Sample documents
 
-`data/samples/` holds three fictional annual reports that land on BUY, HOLD and REJECT.
-Regenerate them with `python scripts/make_sample_pdfs.py`.
+`data/samples/` holds four fictional company documents. Three land on BUY, HOLD and REJECT.
+The fourth, `Orion_Components_2025.pdf`, deliberately leaves figures out, to show the app
+working them out or asking for them. Regenerate them with `python scripts/make_sample_pdfs.py`.
 
 ## How the LLM is used
 

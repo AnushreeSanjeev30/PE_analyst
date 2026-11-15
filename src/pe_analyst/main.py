@@ -56,6 +56,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the frontend read the file name of a downloaded report.
+    expose_headers=["Content-Disposition"],
 )
 app.add_middleware(AuditLoggingMiddleware)
 app.include_router(auth_router, prefix="/api/v1")

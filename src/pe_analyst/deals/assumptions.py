@@ -206,6 +206,7 @@ class SuggestedInputs(BaseModel):
     assumptions: list[Suggestion]
     competitive_position: Suggestion
     market_growth_pct: Suggestion
+    company_name: Suggestion
 
 
 _SENTENCE = re.compile(r"(?<=[.!?;])\s+")
@@ -366,6 +367,60 @@ def suggest_market_growth(reports: Sequence[DocumentIntelligenceReport]) -> Sugg
         value=None,
         basis=BASIS_NEEDS_INPUT,
         note="No market growth rate was found in the documents. Optional.",
+    )
+
+
+_TITLE_LINE = re.compile(
+    r"^(?P<name>[A-Z][\w&.,' ]{2,70}?)\s*[-\u2013\u2014:|]\s*(?:FY\s?)?\d{4}\s+Annual Report",
+)
+# Words in a file name that describe the document rather than name the company.
+_FILE_NOISE = re.compile(
+    r"\b(?:annual report|financial statements|audited accounts|accounts|management presentation|"
+    r"presentation|information memorandum|cim|10-?k|fy\s?\d{2,4}|(?:19|20)\d{2}|final|draft|"
+    r"v\d+|copy)\b",
+    re.IGNORECASE,
+)
+
+
+def suggest_company_name(reports: Sequence[DocumentIntelligenceReport]) -> Suggestion:
+    """Propose the company name from a report's title line, or failing that its file name."""
+
+    for report in reports:
+        first_page = [item.excerpt for item in report.industry_evidence if item.page_number == 1]
+        first_page += [
+            reference.excerpt
+            for section in report.sections
+            for reference in section.references
+            if reference.page_number == 1
+        ]
+        for text in first_page:
+            match = _TITLE_LINE.match(" ".join(text.split()))
+            if match:
+                return Suggestion(
+                    field="company_name",
+                    label="Company name",
+                    value=match.group("name").strip(" ,."),
+                    basis=BASIS_DOCUMENT,
+                    note="Read from the title of the document.",
+                    citation=_cite(report, 1, " ".join(text.split())[:160]),
+                )
+    for report in reports:
+        stem = display_name(report.file_name).rsplit(".", 1)[0]
+        name = " ".join(_FILE_NOISE.sub(" ", re.sub(r"[_\-]+", " ", stem)).split())
+        if name:
+            return Suggestion(
+                field="company_name",
+                label="Company name",
+                value=name,
+                basis=BASIS_DEFAULT,
+                note="Taken from the file name. Correct it if the file is named differently.",
+            )
+    return Suggestion(
+        field="company_name",
+        label="Company name",
+        value=None,
+        basis=BASIS_NEEDS_INPUT,
+        note="Enter the name of the company being analysed.",
     )
 
 
@@ -548,6 +603,7 @@ def suggest_inputs(reports: Sequence[DocumentIntelligenceReport]) -> SuggestedIn
         assumptions=assumptions,
         competitive_position=suggest_competitive_position(reports),
         market_growth_pct=suggest_market_growth(reports),
+        company_name=suggest_company_name(reports),
     )
 
 
@@ -558,6 +614,7 @@ __all__ = [
     "SuggestionCitation",
     "ValuationAssumptionInputs",
     "build_valuation_inputs",
+    "suggest_company_name",
     "suggest_competitive_position",
     "suggest_inputs",
     "suggest_market_growth",
