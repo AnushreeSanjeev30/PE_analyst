@@ -20,7 +20,7 @@ saved runs to show what changed.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
@@ -56,6 +56,12 @@ from pe_analyst.market_data import MarketDataProviderError, build_market_data_pr
 
 from .assumptions import SuggestedInputs, build_valuation_inputs, suggest_inputs
 from .comparison import AnalysisComparison, compare_analyses
+from .export import (
+    build_analysis_document,
+    build_comparison_document,
+    render,
+    safe_filename,
+)
 from .repository import (
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -355,6 +361,55 @@ def compare_two_analyses(
             )
         rows.append(row)
     return compare_analyses(rows[0], rows[1])
+
+
+def _download(content: bytes, media_type: str, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/analyses/compare/export",
+    summary="Download the comparison of two saved analyses as a PDF or Word file",
+    response_class=Response,
+)
+def export_comparison(
+    base: str,
+    other: str,
+    format: Literal["pdf", "docx"] = "pdf",  # noqa: A002 - the query parameter is "format"
+    session: Session = Depends(get_db_session),  # noqa: B008
+    current_user: UserPublic = Depends(get_current_user),  # noqa: B008
+) -> Response:
+    comparison = compare_two_analyses(base, other, session, current_user)
+    content, media_type, extension = render(build_comparison_document(comparison), format)
+    stem = safe_filename(f"{comparison.other.company_name}_run_comparison")
+    return _download(content, media_type, f"{stem}.{extension}")
+
+
+@router.get(
+    "/analyses/{analysis_id}/export",
+    summary="Download one saved analysis as a PDF or Word investment memo",
+    response_class=Response,
+)
+def export_analysis(
+    analysis_id: str,
+    format: Literal["pdf", "docx"] = "pdf",  # noqa: A002 - the query parameter is "format"
+    session: Session = Depends(get_db_session),  # noqa: B008
+    current_user: UserPublic = Depends(get_current_user),  # noqa: B008
+) -> Response:
+    analysis = DealAnalysisRepository(session).get(analysis_id, current_user)
+    if analysis is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No analysis found with id {analysis_id}")
+    if analysis.status not in (STATUS_COMPLETED, STATUS_FAILED):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "This analysis is still running. Try again when it finishes."
+        )
+    content, media_type, extension = render(build_analysis_document(analysis), format)
+    stem = safe_filename(f"{analysis.company_name}_investment_memo")
+    return _download(content, media_type, f"{stem}.{extension}")
 
 
 @router.get(

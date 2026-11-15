@@ -227,6 +227,7 @@ export interface SuggestedInputs {
   assumptions: Suggestion[];
   competitive_position: Suggestion;
   market_growth_pct: Suggestion;
+  company_name: Suggestion;
 }
 
 export interface DealAnalysisRequest {
@@ -729,6 +730,8 @@ export interface DriverChange {
 
 export interface InputChange {
   path: string;
+  /** The input in plain words. */
+  label: string;
   base: unknown;
   other: unknown;
 }

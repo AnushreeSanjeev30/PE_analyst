@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { DecisionExplanationCard } from "../components/DecisionExplanationCard";
+import { DownloadButtons } from "../components/DownloadButtons";
 import { Layout } from "../components/Layout";
 import { PdfPageLink } from "../components/PdfPageLink";
 import { PipelineTrace } from "../components/PipelineTrace";
@@ -243,6 +244,13 @@ export function DealReportPage() {
               <SeverityBadge level={final_recommendation} />
             </div>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-1)] px-4 py-3">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Save this report as an investment memo to circulate or edit.
+          </p>
+          <DownloadButtons path={`/deals/analyses/${record.id}/export`} label="Download as" />
         </div>
 
         {error && (

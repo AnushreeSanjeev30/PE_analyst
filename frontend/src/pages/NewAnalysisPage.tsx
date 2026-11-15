@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { DEFAULT_FINANCIALS, FinancialStatementFields } from "../components/FinancialStatementFields";
+import {
+  DEFAULT_FINANCIALS,
+  FinancialStatementFields,
+  financialLabel,
+} from "../components/FinancialStatementFields";
 import { Layout } from "../components/Layout";
 import { PdfPageLink } from "../components/PdfPageLink";
 import { extractErrorMessage, getDealRoom, listDocuments, startAnalysis, suggestInputs } from "../lib/api";
@@ -51,6 +55,41 @@ const DEAL_FIELDS: AssumptionField[] = [
 ];
 
 const ALL_FIELDS = [...OPERATING_FIELDS, ...CAPITAL_FIELDS, ...DEAL_FIELDS];
+
+// What each input means and where to get it. Shown wherever the documents could not supply
+// the value, so nobody has to guess what belongs in an empty box.
+const FIELD_HELP: Record<string, string> = {
+  revenue_growth: "Your forecast of yearly revenue growth over the holding period.",
+  ebitda_margin: "EBITDA divided by revenue.",
+  ebit_margin: "Operating income divided by revenue.",
+  capex_pct_revenue: "Capital expenditure divided by revenue.",
+  nwc_pct_revenue: "Extra working capital needed per unit of new revenue. 2% is typical for software; higher for stock-heavy businesses.",
+  tax_rate: "The company's effective tax rate (income tax / pre-tax profit).",
+  debt: "All borrowings on the balance sheet, short and long term.",
+  cash: "Cash and cash equivalents on the balance sheet.",
+  shares_outstanding: "Share count from the cover page or the equity note, in the same units as the statements (e.g. millions).",
+  current_price_per_share: "Today's share price or the offer price. Leave blank for a private company.",
+  entry_multiple: "The price you expect to pay, as a multiple of current EBITDA. Purchase price = this x EBITDA.",
+  exit_multiple: "The multiple you expect to sell at. Follows the entry multiple until you change it.",
+  holding_period: "Years you plan to hold the investment before selling.",
+};
+
+/** The assumptions that are plain arithmetic on the financial statements. */
+function deriveFromStatements(
+  current: FinancialStatementInput,
+  previous: FinancialStatementInput,
+): Record<string, string> {
+  const derived: Record<string, string> = {};
+  const ratio = (top: number, bottom: number) => String(Math.round((top / bottom) * 10000) / 100);
+  if (current.revenue > 0) {
+    derived.ebitda_margin = ratio(current.ebitda, current.revenue);
+    derived.ebit_margin = ratio(current.ebit, current.revenue);
+    derived.capex_pct_revenue = ratio(current.capital_expenditure, current.revenue);
+    if (previous.revenue > 0) derived.revenue_growth = ratio(current.revenue - previous.revenue, previous.revenue);
+  }
+  derived.debt = String(current.total_debt);
+  return derived;
+}
 
 const UNIT_SUFFIX: Record<FieldKind, string> = { percent: "%", money: "", multiple: "x", number: "", years: "yrs" };
 
@@ -124,9 +163,34 @@ const BASIS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
   "Needs input": { bg: "#d03b3b1a", fg: "#d03b3b", label: "Needs your input" },
 };
 
-function Provenance({ suggestion }: { suggestion: Suggestion | undefined }) {
-  if (!suggestion) return null;
+function Provenance({
+  suggestion,
+  status,
+  help,
+}: {
+  suggestion: Suggestion | undefined;
+  /** Overrides the document's label once the analyst or the form has changed the value. */
+  status?: "yours" | "recalculated" | "linked";
+  help?: string;
+}) {
+  if (status) {
+    const text = {
+      yours: ["#89878133", "#52514e", "Your value", ""],
+      recalculated: ["#3987e51a", "#184f95", "Recalculated", "Updated from the financial figures above."],
+      linked: ["#3987e51a", "#184f95", "Follows entry multiple", "Change it if you expect to sell at a different multiple."],
+    }[status];
+    return (
+      <div className="mt-1 text-xs text-[var(--text-muted)]">
+        <span className="inline-block rounded px-1.5 py-0.5 font-medium" style={{ backgroundColor: text[0], color: text[1] }}>
+          {text[2]}
+        </span>
+        {text[3] && <div className="mt-0.5">{text[3]}</div>}
+      </div>
+    );
+  }
+  if (!suggestion) return help ? <div className="mt-1 text-xs text-[var(--text-muted)]">{help}</div> : null;
   const style = BASIS_STYLE[suggestion.basis] ?? BASIS_STYLE.Default;
+  const showHelp = help && (suggestion.basis === "Needs input" || suggestion.basis === "Default");
   return (
     <div className="mt-1 text-xs text-[var(--text-muted)]">
       <span className="inline-block rounded px-1.5 py-0.5 font-medium" style={{ backgroundColor: style.bg, color: style.fg }}>
@@ -142,6 +206,7 @@ function Provenance({ suggestion }: { suggestion: Suggestion | undefined }) {
         </PdfPageLink>
       )}
       <div className="mt-0.5">{suggestion.note}</div>
+      {showHelp && <div className="mt-0.5">{help}</div>}
     </div>
   );
 }
@@ -154,11 +219,13 @@ function AssumptionGrid({
   values,
   onChange,
   suggestions,
+  statuses,
 }: {
   fields: AssumptionField[];
   values: AssumptionText;
   onChange: (key: string, value: string) => void;
   suggestions: Record<string, Suggestion>;
+  statuses: Record<string, "yours" | "recalculated" | "linked">;
 }) {
   return (
     <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -171,19 +238,25 @@ function AssumptionGrid({
             </span>
             <span className="mt-1 flex items-center gap-1.5">
               <input
+                id={`field-${field.key}`}
                 type="number"
                 step="any"
-                required={!field.optional}
                 value={values[field.key] ?? ""}
                 onChange={(e) => onChange(field.key, e.target.value)}
-                className={INPUT_CLASS}
+                className={`${INPUT_CLASS} ${
+                  !field.optional && (values[field.key] ?? "") === "" ? "border-[var(--status-critical)] bg-[#d03b3b0d]" : ""
+                }`}
               />
               {UNIT_SUFFIX[field.kind] && (
                 <span className="w-6 shrink-0 text-xs text-[var(--text-muted)]">{UNIT_SUFFIX[field.kind]}</span>
               )}
             </span>
           </label>
-          <Provenance suggestion={suggestions[field.key]} />
+          <Provenance
+            suggestion={suggestions[field.key]}
+            status={statuses[field.key]}
+            help={FIELD_HELP[field.key]}
+          />
         </div>
       ))}
     </div>
@@ -211,6 +284,14 @@ export function NewAnalysisPage() {
 
   const [dealName, setDealName] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const companyTouched = useRef(false);
+  // How each assumption last got its value, when that was not straight from the documents.
+  const [statuses, setStatuses] = useState<Record<string, "yours" | "recalculated" | "linked">>({});
+  const statusesRef = useRef(statuses);
+  statusesRef.current = statuses;
+  // Figures the analyst has typed, as "current:revenue". A missing figure counts as supplied
+  // once it has been typed, even when the value typed is a genuine zero.
+  const [typedFigures, setTypedFigures] = useState<Set<string>>(new Set());
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   // Order matters: financial figures are taken from the first document that reports each one.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -270,34 +351,88 @@ export function NewAnalysisPage() {
 
   function toggleDocument(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
-    // The proposals describe a specific set of documents; a different set invalidates them.
-    setSuggested(null);
   }
 
-  async function handleSuggest() {
+  /** The analyst typed a value: keep it, and stop overwriting that field automatically. */
+  function setAssumption(key: string, value: string) {
+    const linkExit = key === "entry_multiple" && statusesRef.current.exit_multiple !== "yours";
+    setAssumptions((current) => ({ ...current, [key]: value, ...(linkExit ? { exit_multiple: value } : {}) }));
+    setStatuses((current) => ({ ...current, [key]: "yours", ...(linkExit ? { exit_multiple: "linked" } : {}) }));
+  }
+
+  /** A financial figure changed: refresh every assumption that is arithmetic on the statements,
+   *  except the ones the analyst has set by hand. */
+  function setFinancials(
+    period: "current" | "previous",
+    next: FinancialStatementInput,
+    changed: keyof FinancialStatementInput,
+  ) {
+    setTypedFigures((existing) => new Set(existing).add(`${period}:${changed}`));
+    const current = period === "current" ? next : currentFinancials;
+    const previous = period === "previous" ? next : previousFinancials;
+    if (period === "current") setCurrentFinancials(next);
+    else setPreviousFinancials(next);
+    const derived = deriveFromStatements(current, previous);
+    const updates: Record<string, string> = {};
+    for (const [key, value] of Object.entries(derived)) {
+      if (statusesRef.current[key] !== "yours" && assumptions[key] !== value) updates[key] = value;
+    }
+    if (Object.keys(updates).length === 0) return;
+    setAssumptions((existing) => ({ ...existing, ...updates }));
+    setStatuses((existing) => {
+      const merged = { ...existing };
+      for (const key of Object.keys(updates)) merged[key] = "recalculated";
+      return merged;
+    });
+  }
+
+  const readDocuments = useCallback(async (ids: string[]) => {
     setError(null);
     setSuggesting(true);
     try {
-      const result = await suggestInputs(selectedIds);
+      const result = await suggestInputs(ids);
       setSuggested(result);
+      setTypedFigures(new Set());
       setCurrentFinancials({ ...zeroFinancials(), ...result.current_financials } as FinancialStatementInput);
       setPreviousFinancials({ ...zeroFinancials(), ...result.previous_financials } as FinancialStatementInput);
-      const next: AssumptionText = { ...assumptions };
-      for (const item of result.assumptions) {
-        const field = ALL_FIELDS.find((candidate) => candidate.key === item.field);
-        if (field) next[item.field] = toText(item.value, field.kind);
-      }
-      setAssumptions(next);
+      // Values the analyst typed survive a re-read; everything else takes the documents' value.
+      const mine = statusesRef.current;
+      setAssumptions((existing) => {
+        const next: AssumptionText = { ...existing };
+        for (const item of result.assumptions) {
+          const field = ALL_FIELDS.find((candidate) => candidate.key === item.field);
+          if (field && mine[item.field] !== "yours") next[item.field] = toText(item.value, field.kind);
+        }
+        return next;
+      });
+      setStatuses((existing) =>
+        Object.fromEntries(Object.entries(existing).filter(([, status]) => status === "yours")),
+      );
       if (typeof result.competitive_position.value === "string") {
         setCompetitivePosition(result.competitive_position.value);
       }
       setMarketGrowth(toText(result.market_growth_pct.value, "percent"));
+      if (!companyTouched.current && typeof result.company_name.value === "string") {
+        setCompanyName(result.company_name.value);
+      }
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
       setSuggesting(false);
     }
-  }
+  }, []);
+
+  // Read the documents as soon as the selection settles: no button to remember to press.
+  const selectionKey = selectedIds.join(",");
+  useEffect(() => {
+    if (!selectionKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- selection cleared
+      setSuggested(null);
+      return;
+    }
+    const timer = window.setTimeout(() => readDocuments(selectionKey.split(",")), 350);
+    return () => window.clearTimeout(timer);
+  }, [selectionKey, readDocuments]);
 
   function updatePeer(index: number, key: keyof PeerInput, value: string) {
     setPeersAreExamples(false);
@@ -320,7 +455,7 @@ export function NewAnalysisPage() {
       for (const key of Object.keys(form) as Array<keyof FinancialStatementInput>) {
         // A figure the documents lacked stays missing until the analyst types a real value, so
         // the server can still refuse the run and name it rather than accept a silent zero.
-        const missingAndBlank = read[key] === undefined && form[key] === 0;
+        const missingAndBlank = read[key] === undefined && !typedFigures.has(`${period}:${key}`);
         if (!missingAndBlank && read[key] !== form[key]) overrides[period][key] = form[key];
       }
     }
@@ -414,6 +549,52 @@ export function NewAnalysisPage() {
   }
 
   const missing = suggested?.missing_financials ?? [];
+
+  // What still stands between the analyst and a run, and what merely deserves a second look.
+  const blockers: Array<{ text: string; target: string }> = [];
+  const checks: Array<{ text: string; target: string }> = [];
+  if (!companyName.trim()) blockers.push({ text: "Enter the company name.", target: "field-company" });
+  for (const name of missing) {
+    if (!typedFigures.has(`current:${name}`) || !typedFigures.has(`previous:${name}`)) {
+      blockers.push({
+        text: `Enter ${financialLabel(name).toLowerCase()} for both periods (not found in the documents).`,
+        target: typedFigures.has(`current:${name}`) ? `fin-previous-${name}` : `fin-current-${name}`,
+      });
+    }
+  }
+  for (const field of ALL_FIELDS) {
+    const text = assumptions[field.key] ?? "";
+    const suggestion = suggestionByField[field.key];
+    if (text === "" && !field.optional) {
+      blockers.push({ text: `Enter ${field.label.toLowerCase()}.`, target: `field-${field.key}` });
+    } else if (suggestion?.basis === "Default" && !statuses[field.key]) {
+      checks.push({
+        text: `${field.label} is a default (${text}${UNIT_SUFFIX[field.kind]}), not from the documents.`,
+        target: `field-${field.key}`,
+      });
+    }
+  }
+  const namedPeerCount = peers.filter((peer) => peer.name.trim()).length;
+  if (namedPeerCount < 2 && !peerTickers.trim()) {
+    blockers.push({ text: "Add at least two comparable companies, or peer tickers.", target: "section-peers" });
+  } else if (peersAreExamples) {
+    checks.push({ text: "The comparable companies are made-up examples. Replace them.", target: "section-peers" });
+  }
+  if (usingDocuments && !industryName.trim()) {
+    blockers.push({ text: "Enter the industry name.", target: "field-industry" });
+  }
+  if (suggested && suggested.competitive_position.basis !== "Document") {
+    checks.push({ text: "Competitive position was not stated in the documents; set it yourself.", target: "field-position" });
+  }
+
+  function jumpTo(target: string) {
+    const element = document.getElementById(target);
+    if (!element) return;
+    // A figure inside the collapsed statements panel must be revealed before it can be focused.
+    element.closest("details")?.setAttribute("open", "");
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) element.focus();
+  }
   // Many figures share a page; list each document page once.
   const financialSources = (suggested?.financial_sources ?? []).filter(
     (source, index, all) =>
@@ -427,9 +608,22 @@ export function NewAnalysisPage() {
       <div className="max-w-4xl pb-16">
         <h1 className="text-2xl font-semibold text-[var(--text-primary)]">New Deal Analysis</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Pick the documents, let the app read what it can from them, then confirm or correct each input. Every
-          proposed value shows where it came from.
+          Most of this form fills itself in. Your job is to check it and supply the few things only you know.
         </p>
+        <ol className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+          {[
+            ["Pick the documents", "Tick everything you have on the company. They are read automatically."],
+            ["Check what was read", "Figures and assumptions appear with the page they came from."],
+            ["Add what's missing", "The checklist at the bottom names every box that still needs you."],
+            ["Run it", "The analysis runs in the background and is saved to the deal."],
+          ].map(([title, text], index) => (
+            <li key={title} className="rounded-lg border border-[var(--border-hairline)] bg-[var(--surface-1)] p-3">
+              <div className="text-xs font-semibold text-[var(--series-1)]">Step {index + 1}</div>
+              <div className="mt-0.5 text-sm font-medium text-[var(--text-primary)]">{title}</div>
+              <div className="mt-1 text-xs text-[var(--text-muted)]">{text}</div>
+            </li>
+          ))}
+        </ol>
         {dealId && (
           <p className="mt-2 text-sm text-[var(--text-secondary)]">
             Filed in deal{" "}
@@ -445,12 +639,19 @@ export function NewAnalysisPage() {
             <label className="block max-w-sm">
               <span className="block text-xs font-medium text-[var(--text-secondary)]">Company name</span>
               <input
+                id="field-company"
                 type="text"
-                required
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                onChange={(e) => {
+                  companyTouched.current = true;
+                  setCompanyName(e.target.value);
+                }}
+                placeholder="Filled in from the document when you pick one"
                 className={`mt-1 ${INPUT_CLASS}`}
               />
+              {suggested && !companyTouched.current && typeof suggested.company_name.value === "string" && (
+                <span className="mt-1 block text-xs text-[var(--text-muted)]">{suggested.company_name.note}</span>
+              )}
             </label>
 
             <div className="mt-4">
@@ -494,18 +695,21 @@ export function NewAnalysisPage() {
 
             {usingDocuments && (
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleSuggest}
-                  disabled={suggesting}
-                  className="rounded-md border border-[var(--series-1)] px-4 py-2 text-sm font-medium text-[var(--series-1)] hover:bg-[var(--page-plane)] disabled:opacity-50"
-                >
-                  {suggesting ? "Reading documents..." : suggested ? "Read the documents again" : "Read inputs from these documents"}
-                </button>
-                {suggested && (
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    Inputs filled in below. Check anything marked "Default" or "Needs your input".
-                  </span>
+                <span className="text-sm text-[var(--text-secondary)]">
+                  {suggesting
+                    ? "Reading the documents..."
+                    : suggested
+                      ? "Read. The form below is filled in from these documents; values you type yourself are kept."
+                      : "The documents will be read automatically."}
+                </span>
+                {suggested && !suggesting && (
+                  <button
+                    type="button"
+                    onClick={() => readDocuments(selectedIds)}
+                    className="text-sm font-medium text-[var(--series-1)] hover:underline"
+                  >
+                    Read again
+                  </button>
                 )}
               </div>
             )}
@@ -522,8 +726,9 @@ export function NewAnalysisPage() {
             >
               {missing.length > 0 && (
                 <p className="mb-3 rounded-md border border-[var(--status-warning)] bg-[#fab21914] px-3 py-2 text-sm text-[var(--text-primary)]">
-                  Not found in the documents, so shown as 0 - enter them for both periods:{" "}
-                  <span className="font-medium">{missing.map((name) => name.replace(/_/g, " ")).join(", ")}</span>.
+                  Not found in the documents: <span className="font-medium">{missing.map(financialLabel).join(", ")}</span>.
+                  They are outlined in red below with a note on where to find each one. Margins and growth update
+                  on their own as you type.
                 </p>
               )}
               {suggested?.warnings.map((warning) => (
@@ -539,11 +744,21 @@ export function NewAnalysisPage() {
                 </summary>
                 <h3 className="mt-4 text-sm font-semibold text-[var(--text-primary)]">Current period</h3>
                 <div className="mt-2">
-                  <FinancialStatementFields value={currentFinancials} onChange={setCurrentFinancials} />
+                  <FinancialStatementFields
+                    value={currentFinancials}
+                    onChange={(next, changed) => setFinancials("current", next, changed)}
+                    needsInput={missing.filter((name) => !typedFigures.has(`current:${name}`))}
+                    idPrefix="fin-current"
+                  />
                 </div>
                 <h3 className="mt-5 text-sm font-semibold text-[var(--text-primary)]">Previous period</h3>
                 <div className="mt-2">
-                  <FinancialStatementFields value={previousFinancials} onChange={setPreviousFinancials} />
+                  <FinancialStatementFields
+                    value={previousFinancials}
+                    onChange={(next, changed) => setFinancials("previous", next, changed)}
+                    needsInput={missing.filter((name) => !typedFigures.has(`previous:${name}`))}
+                    idPrefix="fin-previous"
+                  />
                 </div>
               </details>
               {financialSources.length > 0 && (
@@ -569,8 +784,9 @@ export function NewAnalysisPage() {
             <AssumptionGrid
               fields={OPERATING_FIELDS}
               values={assumptions}
-              onChange={(key, value) => setAssumptions((current) => ({ ...current, [key]: value }))}
+              onChange={setAssumption}
               suggestions={suggestionByField}
+              statuses={statuses}
             />
           </Section>
 
@@ -578,8 +794,9 @@ export function NewAnalysisPage() {
             <AssumptionGrid
               fields={CAPITAL_FIELDS}
               values={assumptions}
-              onChange={(key, value) => setAssumptions((current) => ({ ...current, [key]: value }))}
+              onChange={setAssumption}
               suggestions={suggestionByField}
+              statuses={statuses}
             />
           </Section>
 
@@ -590,11 +807,13 @@ export function NewAnalysisPage() {
             <AssumptionGrid
               fields={DEAL_FIELDS}
               values={assumptions}
-              onChange={(key, value) => setAssumptions((current) => ({ ...current, [key]: value }))}
+              onChange={setAssumption}
               suggestions={suggestionByField}
+              statuses={statuses}
             />
           </Section>
 
+          <div id="section-peers" />
           <Section
             title="6. Comparable companies"
             hint="At least two. Used to value the company on market multiples."
@@ -695,7 +914,7 @@ export function NewAnalysisPage() {
                 <span className="block text-xs font-medium text-[var(--text-secondary)]">Industry name</span>
                 <input
                   type="text"
-                  required={usingDocuments}
+                  id="field-industry"
                   value={industryName}
                   onChange={(e) => setIndustryName(e.target.value)}
                   placeholder="Vertical software"
@@ -706,6 +925,7 @@ export function NewAnalysisPage() {
                 <label className="block">
                   <span className="block text-xs font-medium text-[var(--text-secondary)]">Competitive position</span>
                   <select
+                    id="field-position"
                     value={competitivePosition}
                     onChange={(e) => setCompetitivePosition(e.target.value)}
                     className={`mt-1 ${INPUT_CLASS}`}
@@ -804,15 +1024,61 @@ export function NewAnalysisPage() {
             )}
           </Section>
 
-          {error && <p className="text-sm text-[var(--status-critical)]">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-md bg-[var(--series-1)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          <section
+            className="rounded-lg border-2 bg-[var(--surface-1)] p-5"
+            style={{ borderColor: blockers.length > 0 ? "var(--status-critical)" : "var(--status-good)" }}
           >
-            {submitting ? "Starting analysis..." : "Run deal analysis"}
-          </button>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+              {blockers.length > 0
+                ? `Before you run: ${blockers.length} thing${blockers.length === 1 ? "" : "s"} still needed`
+                : "Ready to run"}
+            </h2>
+            {blockers.length > 0 && (
+              <ul className="mt-3 space-y-1.5">
+                {blockers.map((item) => (
+                  <li key={item.text} className="flex items-start gap-2 text-sm">
+                    <span className="mt-0.5 font-semibold text-[var(--status-critical)]">Needed</span>
+                    <button type="button" onClick={() => jumpTo(item.target)} className="text-left text-[var(--series-1)] hover:underline">
+                      {item.text}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {checks.length > 0 && (
+              <>
+                <p className="mt-4 text-xs font-medium text-[var(--text-muted)]">
+                  Worth a look (these will not stop the run)
+                </p>
+                <ul className="mt-1.5 space-y-1.5">
+                  {checks.map((item) => (
+                    <li key={item.text} className="flex items-start gap-2 text-sm">
+                      <span className="mt-0.5 font-semibold" style={{ color: "#9a6700" }}>Check</span>
+                      <button type="button" onClick={() => jumpTo(item.target)} className="text-left text-[var(--series-1)] hover:underline">
+                        {item.text}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {blockers.length === 0 && checks.length === 0 && (
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">Every input is filled in.</p>
+            )}
+
+            {error && <p className="mt-4 text-sm text-[var(--status-critical)]">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={submitting || suggesting || blockers.length > 0}
+              className="mt-4 rounded-md bg-[var(--series-1)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+            >
+              {submitting ? "Starting analysis..." : "Run deal analysis"}
+            </button>
+            {blockers.length > 0 && (
+              <span className="ml-3 text-xs text-[var(--text-muted)]">Click an item above to jump to it.</span>
+            )}
+          </section>
         </form>
       </div>
     </Layout>
