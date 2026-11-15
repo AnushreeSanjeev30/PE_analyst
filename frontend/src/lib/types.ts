@@ -89,9 +89,41 @@ export interface DocumentIntelligenceReport {
 export interface DocumentSummary {
   document_id: string;
   file_name: string;
+  /** file_name without the storage prefix: what to show people. */
+  display_name: string;
   page_count: number;
   risk_factor_count: number;
   warning_count: number;
+  /** The deal this document is filed in; null when private to its uploader. */
+  deal_room_id: string | null;
+  uploaded_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Deal rooms (a deal and its team)
+// ---------------------------------------------------------------------------
+
+export interface DealRoomMember {
+  user_id: string;
+  email: string;
+  role: "owner" | "member";
+}
+
+export interface DealRoomSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  owner_id: string;
+  created_at: string;
+  /** True when the signed-in user may rename the deal, change its team or delete it. */
+  can_manage: boolean;
+  document_count: number;
+  analysis_count: number;
+  member_count: number;
+}
+
+export interface DealRoomDetail extends DealRoomSummary {
+  members: DealRoomMember[];
 }
 
 // ---------------------------------------------------------------------------
@@ -138,13 +170,82 @@ export interface FinancialStatementInput {
   current_liabilities: number;
 }
 
+export interface PeerInput {
+  name: string;
+  enterprise_value: number;
+  market_cap: number;
+  revenue: number;
+  ebitda: number;
+  net_income: number;
+  book_value: number;
+}
+
+/** The analyst's valuation decisions. Rates are decimals (0.08 = 8%). */
+export interface ValuationAssumptionInputs {
+  revenue_growth: number;
+  ebit_margin: number;
+  ebitda_margin: number;
+  tax_rate: number;
+  capex_pct_revenue: number;
+  nwc_pct_revenue: number;
+  cash: number;
+  debt: number;
+  shares_outstanding: number;
+  current_price_per_share?: number | null;
+  entry_multiple: number;
+  exit_multiple: number;
+  holding_period: number;
+  peers: PeerInput[];
+  peer_tickers: string[];
+}
+
+export interface SuggestionCitation {
+  document_id: string;
+  source: string;
+  page_number: number;
+  excerpt: string;
+}
+
+export type SuggestionBasis = "Document" | "Calculated" | "Default" | "Needs input";
+
+/** A proposed value for one input, and where it came from. */
+export interface Suggestion {
+  field: string;
+  label: string;
+  value: number | string | null;
+  basis: SuggestionBasis;
+  note: string;
+  citation: SuggestionCitation | null;
+}
+
+export interface SuggestedInputs {
+  current_financials: Partial<FinancialStatementInput>;
+  previous_financials: Partial<FinancialStatementInput>;
+  missing_financials: string[];
+  financial_sources: SuggestionCitation[];
+  warnings: string[];
+  assumptions: Suggestion[];
+  competitive_position: Suggestion;
+  market_growth_pct: Suggestion;
+}
+
 export interface DealAnalysisRequest {
   company_name: string;
-  // Omit both to have the backend read them from the document named by document_id.
+  // Omit both to have the backend read them from the documents in document_ids.
   current_financials?: FinancialStatementInput | null;
   previous_financials?: FinancialStatementInput | null;
+  /** Corrections to figures read from the documents: {current: {...}, previous: {...}}. */
+  financial_overrides?: Record<string, Record<string, number>> | null;
+  /** Send either valuation_assumptions (preferred) or the raw valuation_inputs. */
+  valuation_assumptions?: ValuationAssumptionInputs | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  valuation_inputs: Record<string, any>;
+  valuation_inputs?: Record<string, any> | null;
+  /** Documents to draw on, most authoritative first. */
+  document_ids?: string[];
+  competitive_position?: string | null;
+  market_growth_pct?: number | null;
+  /** File the analysis in a deal, sharing it with that deal's team. */
+  deal_room_id?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   risk_inputs?: Record<string, any> | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -347,6 +448,8 @@ export interface SourceCitation {
   page_number: number;
   excerpt: string;
   confidence: number;
+  /** The uploaded document this came from, so the PDF can be opened at page_number. */
+  document_id?: string | null;
 }
 
 export interface IndustryFinding {
@@ -586,9 +689,59 @@ export interface DealAnalysisSummary {
   status: AnalysisStatus;
   recommendation: string | null;
   document_id: string | null;
+  deal_room_id: string | null;
+  owner_id: string | null;
   error: string | null;
   created_at: string;
   completed_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Comparing two saved analyses
+// ---------------------------------------------------------------------------
+
+export interface ComparisonRun {
+  id: string;
+  company_name: string;
+  status: string;
+  recommendation: string | null;
+  created_at: string;
+}
+
+export interface MetricChange {
+  key: string;
+  label: string;
+  unit: "percent" | "multiple" | "number" | "money" | "text";
+  base: number | string | null;
+  other: number | string | null;
+  delta: number | null;
+  changed: boolean;
+}
+
+export interface DriverChange {
+  area: string;
+  base_direction: string | null;
+  other_direction: string | null;
+  base_statement: string | null;
+  other_statement: string | null;
+  changed: boolean;
+}
+
+export interface InputChange {
+  path: string;
+  base: unknown;
+  other: unknown;
+}
+
+export interface AnalysisComparison {
+  base: ComparisonRun;
+  other: ComparisonRun;
+  recommendation_changed: boolean;
+  summary: string;
+  metrics: MetricChange[];
+  drivers: DriverChange[];
+  input_changes: InputChange[];
+  input_changes_truncated: boolean;
 }
 
 /** A saved analysis with its report, which is null until the run finishes. */

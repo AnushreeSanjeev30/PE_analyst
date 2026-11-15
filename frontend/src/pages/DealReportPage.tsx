@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { DecisionExplanationCard } from "../components/DecisionExplanationCard";
 import { Layout } from "../components/Layout";
+import { PdfPageLink } from "../components/PdfPageLink";
 import { PipelineTrace } from "../components/PipelineTrace";
 import { ScenarioIrrChart, ScenarioMoicChart } from "../components/ScenarioChart";
 import { SeverityBadge } from "../components/SeverityBadge";
@@ -403,7 +404,14 @@ export function DealReportPage() {
                         <td className="px-3 py-2 align-top"><SeverityBadge level={f.severity} /></td>
                         <td className="px-3 py-2 align-top text-xs text-[var(--text-muted)]">
                           <div className="tabular-nums">
-                            {f.citation.source}, p.{f.citation.page_number} &middot;{" "}
+                            <PdfPageLink
+                              documentId={f.citation.document_id}
+                              page={f.citation.page_number}
+                              title={f.citation.source}
+                            >
+                              {f.citation.source}, p.{f.citation.page_number}
+                            </PdfPageLink>{" "}
+                            &middot;{" "}
                             {(f.citation.confidence * 100).toFixed(0)}%
                           </div>
                           <div className="mt-1 italic">&ldquo;{f.citation.excerpt}&rdquo;</div>

@@ -162,6 +162,39 @@ Not just BUY / HOLD / REJECT. Every ruling comes with a **decision explanation**
 The explanation is assembled from fixed rules with no LLM, so it cannot disagree with the
 decision. The same content is written into the memo as "Decision Rationale and Evidence".
 
+## Working as a deal team
+
+**Deals** (`/api/v1/deal-rooms`) are the unit of sharing. A deal holds its documents, its
+analyses and its team. The owner adds colleagues by email; every member can then read
+everything filed in the deal. Only the owner changes the team, and only the person who ran an
+analysis or uploaded a document can delete or move it. Anything not filed in a deal stays
+private to the user who created it.
+
+**Several documents per analysis.** A deal usually arrives as a set of files: a CIM, audited
+accounts, a management presentation. An analysis takes `document_ids`, combines the evidence
+from all of them, and takes each financial figure from the first document that reports it (so
+list the audited accounts first). Documents in different units ("in thousands" vs "in
+millions") are converted. Every citation records which file it came from.
+
+**Inputs are proposed, then confirmed.** `POST /api/v1/deals/suggest-inputs` reads the selected
+documents and proposes the financial statements, the operating assumptions, the competitive
+position and the market growth rate. Each proposal is labelled **Document** (read from a cited
+page), **Calculated** (arithmetic on such figures), **Default** (a house default the analyst
+must set) or **Needs input**. The analyst corrects the form and submits a dozen
+`valuation_assumptions`; the server expands them into the full DCF, comparables and LBO inputs
+(`src/pe_analyst/deals/assumptions.py`). No JSON is typed. The raw `valuation_inputs` form
+still works for scripts. The proposals use fixed rules, not an LLM: competitive position is
+read from the company's own wording, which is a starting point to confirm, not a finding.
+
+**Citations open the source.** `GET /api/v1/documents/{id}/file` returns the original PDF to
+anyone allowed to read the document. In the app, clicking any cited page opens the PDF at that
+page beside the report.
+
+**Comparing runs.** `GET /api/v1/deals/analyses/compare?base=..&other=..` lines up two saved
+runs: every input that differs, every headline result that moved (IRR, MOIC, value per share,
+risk), and each scorecard area whose vote flipped. Tick two runs on the Analyses page or inside
+a deal.
+
 ## Saved analyses and background runs
 
 `POST /api/v1/deals/analyses` starts a run in the background and returns an id;
@@ -175,9 +208,15 @@ failed on startup and must be run again. Use a job queue before running more tha
 
 ## Who can see what
 
-Documents, document search and saved analyses belong to the user who created them. Another
-user gets a 404 for them. A user whose role is `admin` can see everything. Documents uploaded
-before ownership was added have no owner and are hidden; upload them again.
+Documents, document search and saved analyses belong to the user who created them, and are
+shared with the team of the deal they are filed in. Anyone else gets a 404 for them. A user
+whose role is `admin` can see everything. Documents uploaded before ownership was added have
+no owner and are hidden; upload them again.
+
+## Sample documents
+
+`data/samples/` holds three fictional annual reports that land on BUY, HOLD and REJECT.
+Regenerate them with `python scripts/make_sample_pdfs.py`.
 
 ## How the LLM is used
 

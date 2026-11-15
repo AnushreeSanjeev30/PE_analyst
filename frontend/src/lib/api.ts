@@ -1,8 +1,13 @@
 import axios, { AxiosError } from "axios";
 import type {
+  AnalysisComparison,
   DealAnalysisRecord,
   DealAnalysisRequest,
   DealAnalysisSummary,
+  DealRoomDetail,
+  DealRoomMember,
+  DealRoomSummary,
+  SuggestedInputs,
   DocumentIntelligenceReport,
   DocumentSummary,
   RAGAnswer,
@@ -105,18 +110,69 @@ export async function login(email: string, password: string): Promise<Token> {
 // Documents
 // ---------------------------------------------------------------------------
 
-export async function uploadDocument(file: File): Promise<DocumentIntelligenceReport> {
+/** Uploads a PDF. Pass dealRoomId to file it in a deal, sharing it with that deal's team. */
+export async function uploadDocument(file: File, dealRoomId?: string): Promise<DocumentIntelligenceReport> {
   const form = new FormData();
   form.append("file", file);
+  if (dealRoomId) form.append("deal_room_id", dealRoomId);
   const { data } = await client.post<DocumentIntelligenceReport>("/documents/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data;
 }
 
-export async function listDocuments(): Promise<DocumentSummary[]> {
-  const { data } = await client.get<DocumentSummary[]>("/documents");
+/** Documents the user may read; pass dealRoomId to list one deal's documents only. */
+export async function listDocuments(dealRoomId?: string): Promise<DocumentSummary[]> {
+  const { data } = await client.get<DocumentSummary[]>("/documents", {
+    params: dealRoomId ? { deal_room_id: dealRoomId } : undefined,
+  });
   return data;
+}
+
+/** The original PDF. Fetched as a blob because the request needs the auth header. */
+export async function fetchDocumentFile(documentId: string): Promise<Blob> {
+  const { data } = await client.get<Blob>(`/documents/${documentId}/file`, { responseType: "blob" });
+  return data;
+}
+
+/** Files a document in a deal, or takes it out of its deal with null. */
+export async function assignDocumentDealRoom(documentId: string, dealRoomId: string | null): Promise<DocumentSummary> {
+  const { data } = await client.put<DocumentSummary>(`/documents/${documentId}/deal-room`, {
+    deal_room_id: dealRoomId,
+  });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Deal rooms
+// ---------------------------------------------------------------------------
+
+export async function listDealRooms(): Promise<DealRoomSummary[]> {
+  const { data } = await client.get<DealRoomSummary[]>("/deal-rooms");
+  return data;
+}
+
+export async function createDealRoom(name: string, description?: string): Promise<DealRoomDetail> {
+  const { data } = await client.post<DealRoomDetail>("/deal-rooms", { name, description: description || null });
+  return data;
+}
+
+export async function getDealRoom(roomId: string): Promise<DealRoomDetail> {
+  const { data } = await client.get<DealRoomDetail>(`/deal-rooms/${roomId}`);
+  return data;
+}
+
+export async function deleteDealRoom(roomId: string): Promise<void> {
+  await client.delete(`/deal-rooms/${roomId}`);
+}
+
+export async function addDealRoomMember(roomId: string, email: string): Promise<DealRoomMember> {
+  const { data } = await client.post<DealRoomMember>(`/deal-rooms/${roomId}/members`, { email });
+  return data;
+}
+
+export async function removeDealRoomMember(roomId: string, userId: string): Promise<void> {
+  await client.delete(`/deal-rooms/${roomId}/members/${userId}`);
 }
 
 export async function getDocument(documentId: string): Promise<DocumentIntelligenceReport> {
@@ -149,8 +205,25 @@ export async function startAnalysis(request: DealAnalysisRequest): Promise<DealA
   return data;
 }
 
-export async function listAnalyses(): Promise<DealAnalysisSummary[]> {
-  const { data } = await client.get<DealAnalysisSummary[]>("/deals/analyses");
+/** Analyses the user may read; pass dealRoomId to list one deal's analyses only. */
+export async function listAnalyses(dealRoomId?: string): Promise<DealAnalysisSummary[]> {
+  const { data } = await client.get<DealAnalysisSummary[]>("/deals/analyses", {
+    params: dealRoomId ? { deal_room_id: dealRoomId } : undefined,
+  });
+  return data;
+}
+
+/** Proposes financials and valuation assumptions from documents, for the analyst to confirm. */
+export async function suggestInputs(documentIds: string[]): Promise<SuggestedInputs> {
+  const { data } = await client.post<SuggestedInputs>("/deals/suggest-inputs", { document_ids: documentIds });
+  return data;
+}
+
+/** What changed between two saved runs, in the inputs and in the outcome. */
+export async function compareAnalyses(baseId: string, otherId: string): Promise<AnalysisComparison> {
+  const { data } = await client.get<AnalysisComparison>("/deals/analyses/compare", {
+    params: { base: baseId, other: otherId },
+  });
   return data;
 }
 

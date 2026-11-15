@@ -12,6 +12,9 @@ JSON with every claim traceable to a page.
 
 from __future__ import annotations
 
+import re
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from .models import DocumentIntelligenceResult, SectionKind
@@ -166,6 +169,16 @@ class DocumentIntelligenceReport(BaseModel):
         )
 
 
+# Uploads are stored as "<uuid>_<original name>" so two files with the same name can't collide.
+_STORAGE_PREFIX = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_")
+
+
+def display_name(file_name: str) -> str:
+    """The name the user uploaded, without the storage prefix -- what people should see."""
+
+    return _STORAGE_PREFIX.sub("", file_name)
+
+
 class DocumentSummary(BaseModel):
     """Lightweight listing entry -- avoids shipping every section/line-item for a library view."""
 
@@ -173,18 +186,32 @@ class DocumentSummary(BaseModel):
 
     document_id: str
     file_name: str
+    # ``file_name`` without the storage prefix.
+    display_name: str = ""
     page_count: int = Field(ge=0)
     risk_factor_count: int = Field(ge=0)
     warning_count: int = Field(ge=0)
+    # The deal room this document is filed in; None when it is private to its uploader.
+    deal_room_id: str | None = None
+    uploaded_at: datetime | None = None
 
     @classmethod
-    def from_report(cls, report: DocumentIntelligenceReport) -> DocumentSummary:
+    def from_report(
+        cls,
+        report: DocumentIntelligenceReport,
+        *,
+        deal_room_id: str | None = None,
+        uploaded_at: datetime | None = None,
+    ) -> DocumentSummary:
         return cls(
             document_id=report.document_id,
             file_name=report.file_name,
+            display_name=display_name(report.file_name),
             page_count=report.page_count,
             risk_factor_count=len(report.risk_factors),
             warning_count=len(report.warnings),
+            deal_room_id=deal_room_id,
+            uploaded_at=uploaded_at,
         )
 
 
@@ -198,4 +225,5 @@ __all__ = [
     "SectionKind",
     "SourceReferenceSchema",
     "StatementLineItemSchema",
+    "display_name",
 ]

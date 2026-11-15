@@ -91,6 +91,7 @@ class DueDiligenceTools:
                         int(item["page_number"]),
                         item["excerpt"],
                         float(item["confidence"]),
+                        item.get("document_id"),
                     ),
                 )
             )

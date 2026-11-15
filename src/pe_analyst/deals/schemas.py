@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .assumptions import ValuationAssumptionInputs
 
 
 class FinancialStatementInput(BaseModel):
@@ -36,6 +38,15 @@ class DealAnalysisRequest(BaseModel):
 
     ``valuation_inputs.comparables`` may carry ``peer_tickers`` instead of ``peers``; they are
     looked up through the configured market-data provider.
+
+    Supply the valuation either as ``valuation_assumptions`` (a dozen analyst decisions, expanded
+    into the full inputs server-side) or as the raw nested ``valuation_inputs``. Exactly one is
+    required.
+
+    ``document_ids`` names every document the run should draw on; evidence is combined across
+    them and financial figures are taken from the first document that reports each one, so list
+    the most authoritative (audited accounts) first. ``document_id`` is the single-document
+    form and is kept for existing callers.
     """
 
     company_name: str
@@ -44,7 +55,8 @@ class DealAnalysisRequest(BaseModel):
     previous_financials: FinancialStatementInput | None = None
     # Patches for fields the document didn't yield: {"current": {...}, "previous": {...}}.
     financial_overrides: dict[str, dict[str, float]] | None = None
-    valuation_inputs: dict[str, Any]
+    valuation_inputs: dict[str, Any] | None = None
+    valuation_assumptions: ValuationAssumptionInputs | None = None
     risk_inputs: dict[str, Any] | None = None
     scenario_inputs: dict[str, Any] | None = Field(
         default=None,
@@ -64,10 +76,52 @@ class DealAnalysisRequest(BaseModel):
             "extracted industry evidence and risk factors/notes."
         ),
     )
+    document_ids: list[str] = Field(
+        default_factory=list,
+        description="Every document to draw on, most authoritative first.",
+    )
     industry_name: str = Field(
         default="",
-        description="Required when industry_inputs is omitted and derived from document_id.",
+        description="Required when industry_inputs is omitted and derived from documents.",
     )
+    competitive_position: str | None = Field(
+        default=None,
+        description=(
+            "Leader | Strong | Neutral | Weak. Used when industry_inputs is derived from "
+            "documents; defaults to Neutral."
+        ),
+    )
+    market_growth_pct: float | None = Field(
+        default=None,
+        description="Market growth as a decimal (0.12 = 12%), when derived from documents.",
+    )
+    deal_room_id: str | None = Field(
+        default=None,
+        description="File this analysis in a deal room, sharing it with that deal's team.",
+    )
+
+    @model_validator(mode="after")
+    def _one_valuation_source(self) -> DealAnalysisRequest:
+        if self.valuation_inputs is None and self.valuation_assumptions is None:
+            raise ValueError("Provide valuation_assumptions or valuation_inputs")
+        if self.valuation_inputs is not None and self.valuation_assumptions is not None:
+            raise ValueError("Provide valuation_assumptions or valuation_inputs, not both")
+        return self
+
+    @property
+    def all_document_ids(self) -> list[str]:
+        """``document_ids`` plus the legacy ``document_id``, in order, without duplicates."""
+
+        ids = list(self.document_ids)
+        if self.document_id and self.document_id not in ids:
+            ids.insert(0, self.document_id)
+        return list(dict.fromkeys(ids))
+
+
+class SuggestInputsRequest(BaseModel):
+    """Documents to read proposed financials and valuation assumptions from."""
+
+    document_ids: list[str] = Field(min_length=1)
 
 
 class SensitivityRequest(BaseModel):
@@ -90,6 +144,8 @@ class DealAnalysisSummary(BaseModel):
     status: str
     recommendation: str | None = None
     document_id: str | None = None
+    deal_room_id: str | None = None
+    owner_id: str | None = None
     error: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
@@ -107,4 +163,5 @@ __all__ = [
     "DealAnalysisSummary",
     "FinancialStatementInput",
     "SensitivityRequest",
+    "SuggestInputsRequest",
 ]

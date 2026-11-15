@@ -112,7 +112,7 @@ export function DocumentsPage() {
                           to={`/documents/${doc.document_id}`}
                           className="font-medium text-[var(--series-1)] hover:underline"
                         >
-                          {doc.file_name}
+                          {doc.display_name || doc.file_name}
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-sm text-[var(--text-secondary)] tabular-nums">{doc.page_count}</td>

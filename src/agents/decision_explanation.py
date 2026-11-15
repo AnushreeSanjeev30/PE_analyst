@@ -88,6 +88,7 @@ def _citation(item: Any) -> SourceCitation:
         int(item["page_number"]),
         str(item["excerpt"]),
         float(item["confidence"]),
+        item.get("document_id"),
     )
 
 

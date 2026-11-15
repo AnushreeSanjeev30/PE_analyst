@@ -1,3 +1,4 @@
+import { PdfPageLink } from "./PdfPageLink";
 import { SeverityBadge } from "./SeverityBadge";
 import type { DecisionDriver, DecisionExplanation } from "../lib/types";
 
@@ -51,7 +52,10 @@ function DriverRow({ driver }: { driver: DecisionDriver }) {
             >
               <p>&ldquo;{citation.excerpt}&rdquo;</p>
               <footer className="mt-1 text-xs text-[var(--text-muted)] tabular-nums">
-                {citation.source}, page {citation.page_number} &middot; extraction confidence{" "}
+                <PdfPageLink documentId={citation.document_id} page={citation.page_number} title={citation.source}>
+                  {citation.source}, page {citation.page_number}
+                </PdfPageLink>{" "}
+                &middot; extraction confidence{" "}
                 {(citation.confidence * 100).toFixed(0)}%
               </footer>
             </blockquote>

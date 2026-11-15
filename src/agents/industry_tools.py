@@ -34,7 +34,11 @@ class IndustryTools:
     def citations(evidence: list[dict[str, Any]], topic: str) -> list[SourceCitation]:
         return [
             SourceCitation(
-                item["source"], int(item["page_number"]), item["excerpt"], float(item["confidence"])
+                item["source"],
+                int(item["page_number"]),
+                item["excerpt"],
+                float(item["confidence"]),
+                item.get("document_id"),
             )
             for item in evidence
             if item["topic"] == topic
